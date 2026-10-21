@@ -92,3 +92,59 @@ The committed `public/physics-replay.json` records the complete provenance and r
 | Simulation / wall-time ratio | 0.172x | 0.250x |
 
 These runs were **slower than real time** on the loaded local machine. No real-time inference claim is made. Earlier two-second setup trials also completed, but are not used instead of the longer recorded results. The replay is deliberately labeled recorded playback and does not imply that a 60 FPS renderer corresponds to 50 Hz live inference.
+
+## Fixed matched comparison
+
+`comparison-protocol.json` fixes the protocol **before running the comparison**: two references (stand and arm sweep), three conditions (nominal, seed 17 pushes, seed 29 pushes), and two controllers, for twelve five-second episodes. It does not replace the ten-second replay. Execute:
+
+```powershell
+& research\.venv\Scripts\python.exe -m unittest discover -s research -p "test_*.py" -v
+& research\.venv\Scripts\python.exe research\evaluate.py
+```
+
+The optional `--output` argument selects a separate JSON result; the default is `public/physics-comparison.json`. The result records the exact protocol and its SHA-256, runner source hashes, asset provenance, runtime versions, every episode and pooled summaries. It is saved atomically before execution and after every episode. Interrupted or contract-error runs remain explicitly `running`, not complete.
+
+**Matching:** both controllers use the same model instance with a fresh simulation state per episode, nominal initial pose and grounded root height, physical timestep, gains, effort limits, collision geometry and reference generator. `direct_pd` sends the current reference joint positions straight to the same position actuators; it has no learned correction, feedforward torque, lookahead or ONNX invocation. `onnx` retains its pretrained future-reference/history contract. Both use the same world-frame pelvis forces. Execution order alternates controller-first within reference/condition pairs; timings remain loaded-host measurements, not controlled speed benchmarks.
+
+**Disturbances:** for each non-nominal seed, NumPy PCG64 produces two independent horizontal directions. Each push applies 60 N at the pelvis center of mass, with zero vertical force and zero applied torque, during the half-open intervals 1.0-1.2 s and 3.0-3.2 s: 12 N s per push. Directions are identical across controllers and references for a given seed and are saved numerically. No controller is tuned and no seed is selected based on the results.
+
+**Accounting:** falls use the same definition as the replay and do not stop a rollout. Success means completion without a detected fall, **not** a joint-tracking accuracy pass. Non-finite states/actions, numerical warnings or a 90-second per-episode wall budget terminate that episode, retain its last valid control-sample metrics and record the reason. Contract/setup errors abort rather than being converted into successes. The budget is checked between control steps, so it cannot interrupt an individually stalled native call.
+
+All attempted episodes, including falls and early terminations, contribute to failure rates and sample-weighted observed errors. Joint RMSE is pooled from squared errors, not averaged per-episode RMSE. Full-horizon pooled error is withheld unless every scheduled episode for that controller completed. A partial run shows attempted counts; no missing episode is counted as success. Duration and numerical-warning counts are reported separately. These two references and two perturbation seeds are too small and artificial for a published benchmark, statistical superiority, robustness or generalization claim.
+
+### Measured matched results
+
+Protocol SHA-256: `54701a16747837083a891f160cd59c5f92f8caa62250181e8167f0fb4a3c3379`. The fixed matrix was run once; no perturbations were tuned or trials selected afterward. All twelve episodes completed their five-second horizon: 3,000 controller calls (1,500 real ONNX calls and 1,500 direct reference copies) and 60,000 physics steps, with no early terminations or numerical warnings. The original ten-second replay is unchanged.
+
+| Metric across all six episodes per controller | Pretrained ONNX | Direct PD |
+| --- | ---: | ---: |
+| Completed without a detected fall | 6 / 6 | 0 / 6 |
+| Detected falls / fall rate | 0 / 6 (0%) | 6 / 6 (100%) |
+| Early terminations | 0 | 0 |
+| Valid simulated duration | 30 s | 30 s |
+| Pooled joint RMSE, including fallen states | 0.154867 rad | **0.098948 rad** |
+| Mean body-origin world-space error | **0.085157 m** | 0.797560 m |
+| Total rollout-loop wall time | 139.43 s | **56.47 s** |
+
+**The pretrained controller did not win every metric.** Direct PD tracked joint angles more closely and ran faster, but it fell even in the nominal cases. Its missing balance feedback is an intentional baseline limitation, not evidence that all classical controllers fail. Small joint error does not imply world-space stability. The learned tracker remained upright here, but the perturbed stand with seed 29 had 0.178432 m mean body-origin error: standing without a fall does not mean staying accurately at the reference position.
+
+Direct PD fell around 1.34-1.38 s, so its second push occurred after falling. Because it also fell without disturbances, this protocol does not isolate a perturbation robustness threshold. It demonstrates the weakness of this unbalanced reference-PD baseline under the declared conditions, not superiority to a classical balance controller.
+
+Every case is retained below. Joint and body errors include the entire five seconds, including time after a fall. Fall times identify the first sample in the five-sample detection streak.
+
+| Reference | Condition | Controller | First fall | Joint RMSE (rad) | Mean body error (m) | Loop wall (s) |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| Stand | Nominal | ONNX | None | 0.150291 | 0.039802 | 20.80 |
+| Stand | Nominal | Direct PD | 1.38 s | 0.096642 | 0.784345 | 9.74 |
+| Stand | Push seed 17 | ONNX | None | 0.149352 | 0.073722 | 22.76 |
+| Stand | Push seed 17 | Direct PD | 1.36 s | 0.099025 | 0.801078 | 9.04 |
+| Stand | Push seed 29 | ONNX | None | 0.145390 | 0.178432 | 23.75 |
+| Stand | Push seed 29 | Direct PD | 1.34 s | 0.099608 | 0.806015 | 8.69 |
+| Arm sweep | Nominal | ONNX | None | 0.170645 | 0.037876 | 21.03 |
+| Arm sweep | Nominal | Direct PD | 1.38 s | 0.097854 | 0.782924 | 9.46 |
+| Arm sweep | Push seed 17 | ONNX | None | 0.159545 | 0.072285 | 31.87 |
+| Arm sweep | Push seed 17 | Direct PD | 1.36 s | 0.100172 | 0.802528 | 11.31 |
+| Arm sweep | Push seed 29 | ONNX | None | 0.152631 | 0.108823 | 19.23 |
+| Arm sweep | Push seed 29 | Direct PD | 1.34 s | 0.100333 | 0.808472 | 8.23 |
+
+The browser displays this recorded comparison below the independent ten-second replay. A missing or unfinished comparison produces an explicit error without disabling replay; it never substitutes invented results or presents partial wins.

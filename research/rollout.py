@@ -8,6 +8,7 @@ revision in fetch_assets.py. No upstream executable code or pickle is loaded.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import importlib.metadata
@@ -176,9 +177,54 @@ def make_session(path: Path, meta: dict) -> ort.InferenceSession:
     return session
 
 
-def run_case(model: mujoco.MjModel, session: ort.InferenceSession, meta: dict, default: np.ndarray, case: str, seconds: float) -> dict:
+@dataclass(frozen=True)
+class Push:
+    start_step: int
+    end_step: int
+    force_world_n: tuple[float, float, float]
+
+
+def force_at_step(pushes: tuple[Push, ...], step: int) -> np.ndarray:
+    force = np.zeros(3)
+    for push in pushes:
+        if push.start_step <= step < push.end_step:
+            force += push.force_world_n
+    return force
+
+
+def controller_target(controller: str, session: ort.InferenceSession | None, data: mujoco.MjData,
+                      meta: dict, reference: dict, future: list[dict], previous_targets: np.ndarray) -> tuple[np.ndarray, float | None]:
+    if controller == "direct_pd":
+        return reference["q"].copy(), None
+    if controller != "onnx" or session is None:
+        raise ValueError("Expected direct_pd or onnx with a loaded policy.")
+    feed = make_inputs(data, meta, future, previous_targets)
+    before = time.perf_counter()
+    raw, target, kp, kd = session.run(["actions", "joint_pos_targets", "stiffness_targets", "damping_targets"], feed)
+    inference_ms = (time.perf_counter() - before) * 1000
+    if not all(np.isfinite(value).all() for value in (raw, target, kp, kd)):
+        raise FloatingPointError("Non-finite policy output")
+    if target.shape != (1, 29):
+        raise ValueError("Unexpected policy output shape.")
+    if not np.allclose(kp.reshape(-1), meta["control"]["stiffness"], rtol=1e-5) or not np.allclose(kd.reshape(-1), meta["control"]["damping"], rtol=1e-5):
+        raise ValueError("Baked ONNX gains disagree with configured physics gains.")
+    return target[0].copy(), inference_ms
+
+
+def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: dict, default: np.ndarray,
+             case: str, seconds: float, *, controller: str = "onnx", pushes: tuple[Push, ...] = (),
+             record_frames: bool = True, wall_limit_seconds: float | None = None) -> dict:
+    if controller not in ("onnx", "direct_pd") or (controller == "onnx" and session is None):
+        raise ValueError("Invalid controller or missing policy.")
+    if not math.isfinite(seconds) or not 1 <= seconds <= 30:
+        raise ValueError("Each rollout must be between 1 and 30 seconds.")
+    if wall_limit_seconds is not None and (not math.isfinite(wall_limit_seconds) or wall_limit_seconds <= 0):
+        raise ValueError("Wall-time budget must be positive and finite.")
     dt = meta["timing"]["control_dt"]
     steps = round(seconds / dt)
+    for push in pushes:
+        if not 0 <= push.start_step < push.end_step <= steps or len(push.force_world_n) != 3 or not np.isfinite(push.force_world_n).all():
+            raise ValueError("Invalid disturbance schedule.")
     height = grounded_root_height(model, default)
     anchor = meta["robot"]["anchor_body_index"] + 1
     reference_data = mujoco.MjData(model)
@@ -200,11 +246,13 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession, meta: dict, d
     data.qpos[7:] = default
     mujoco.mj_forward(model, data)
     previous_targets = np.zeros(29, dtype=np.float32)
-    frames, errors, body_errors, inference_ms = [], [], [], []
+    frames, errors, body_errors, inference_ms, control_ms = [], [], [], [], []
     heights, tilts, contacts, target_changes = [], [], [], []
     first_fall_time = None
     fall_streak = 0
     warnings_before = data.warning.number.copy()
+    completed_steps = physics_steps = controller_calls = 0
+    termination = None
     started = time.perf_counter()
     for step in range(steps + 1):
         reference = references[step]
@@ -220,7 +268,7 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession, meta: dict, d
         heights.append(root_height)
         tilts.append(math.degrees(math.acos(float(np.clip(pelvis_up, -1, 1)))))
         contacts.append(int(data.ncon))
-        if step % 2 == 0 or step == steps:
+        if record_frames and (step % 2 == 0 or step == steps):
             frames.append({
                 "time": round(step * dt, 6),
                 "body": np.round(data.xpos[1:], 5).tolist(),
@@ -232,33 +280,45 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession, meta: dict, d
             })
         if step == steps:
             break
+        if wall_limit_seconds is not None and time.perf_counter() - started >= wall_limit_seconds:
+            termination = "wall_budget_exceeded"
+            break
         future = [references[step + offset] for offset in meta["motion"]["future_step_indices"]]
-        feed = make_inputs(data, meta, future, previous_targets)
         before = time.perf_counter()
-        raw, target, kp, kd = session.run(["actions", "joint_pos_targets", "stiffness_targets", "damping_targets"], feed)
-        inference_ms.append((time.perf_counter() - before) * 1000)
-        if not all(np.isfinite(value).all() for value in (raw, target, kp, kd)):
-            raise FloatingPointError(f"Non-finite policy output at step {step}")
-        if target.shape != (1, 29):
-            raise ValueError("Unexpected policy output shape.")
-        if not np.allclose(kp.reshape(-1), meta["control"]["stiffness"], rtol=1e-5) or not np.allclose(kd.reshape(-1), meta["control"]["damping"], rtol=1e-5):
-            raise ValueError("Baked ONNX gains disagree with configured physics gains.")
-        target_changes.append(float(np.linalg.norm(target[0] - previous_targets)))
-        previous_targets = target[0].copy()
+        controller_calls += 1
+        try:
+            target, latency = controller_target(controller, session, data, meta, reference, future, previous_targets)
+        except FloatingPointError as error:
+            termination = str(error)
+            break
+        control_ms.append((time.perf_counter() - before) * 1000)
+        if latency is not None:
+            inference_ms.append(latency)
+        target_changes.append(float(np.linalg.norm(target - previous_targets)))
+        previous_targets = target
         data.ctrl[:] = previous_targets
+        data.xfrc_applied[:] = 0
+        data.xfrc_applied[1, :3] = force_at_step(pushes, step)
         for _ in range(meta["timing"]["decimation"]):
             mujoco.mj_step(model, data)
+            physics_steps += 1
         mujoco.mj_forward(model, data)
         if not np.isfinite(data.qpos).all() or not np.isfinite(data.qvel).all():
-            raise FloatingPointError(f"Non-finite physics at step {step}")
+            termination = f"Non-finite physics after control step {step}"
+            break
         if np.any(data.warning.number > warnings_before):
-            raise RuntimeError(f"MuJoCo raised a numerical warning at step {step}: {data.warning.number.tolist()}")
+            termination = f"MuJoCo numerical warning after control step {step}"
+            break
+        completed_steps += 1
     wall_seconds = time.perf_counter() - started
     metrics = {
-        "control_steps": steps,
-        "physics_steps": steps * meta["timing"]["decimation"],
-        "simulated_seconds": round(float(data.time), 6),
-        "completed": math.isclose(float(data.time), steps * dt, abs_tol=1e-7),
+        "requested_seconds": seconds,
+        "control_steps": completed_steps,
+        "controller_calls": controller_calls,
+        "physics_steps": physics_steps,
+        "error_samples": len(errors),
+        "simulated_seconds": round(completed_steps * dt, 6),
+        "completed": termination is None and completed_steps == steps and math.isclose(float(data.time), steps * dt, abs_tol=1e-7),
         "fell": first_fall_time is not None,
         "first_fall_time_s": first_fall_time,
         "joint_rmse_rad": float(np.sqrt(np.mean(np.square(errors)))),
@@ -267,16 +327,17 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession, meta: dict, d
         "min_root_height_m": min(heights),
         "max_pelvis_tilt_deg": max(tilts),
         "fraction_frames_with_contacts": float(np.mean(np.asarray(contacts) > 0)),
-        "mean_inference_ms": float(np.mean(inference_ms)),
-        "p95_inference_ms": float(np.percentile(inference_ms, 95)),
-        "mean_pd_target_change_l2_rad": float(np.mean(target_changes[1:])),
+        "mean_inference_ms": float(np.mean(inference_ms)) if inference_ms else None,
+        "p95_inference_ms": float(np.percentile(inference_ms, 95)) if inference_ms else None,
+        "mean_control_ms": float(np.mean(control_ms)) if control_ms else None,
+        "mean_pd_target_change_l2_rad": float(np.mean(target_changes[1:])) if len(target_changes) > 1 else None,
         "wall_seconds": wall_seconds,
-        "simulation_to_wall_ratio": steps * dt / wall_seconds,
-        "numerical_warnings": 0,
+        "simulation_to_wall_ratio": completed_steps * dt / wall_seconds,
+        "numerical_warnings": int(np.sum(data.warning.number - warnings_before)),
         "initial_root_height_m": height,
     }
-    print(json.dumps({"case": case, **metrics}, indent=2), flush=True)
-    return {"name": case, "metrics": metrics, "frames": frames}
+    print(json.dumps({"case": case, "controller": controller, "termination": termination, **metrics}), flush=True)
+    return {"name": case, "controller": controller, "termination": termination, "metrics": metrics, "frames": frames}
 
 
 def run(assets: Path, output: Path, seconds: float) -> dict:
@@ -322,6 +383,8 @@ def run(assets: Path, output: Path, seconds: float) -> dict:
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
+    if any(not case["metrics"]["completed"] for case in result["cases"]):
+        raise RuntimeError(f"Incomplete rollout saved to {output}; inspect termination and metrics.")
     return result
 
 

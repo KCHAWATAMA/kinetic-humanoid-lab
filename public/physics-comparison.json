@@ -1,0 +1,722 @@
+{
+  "schemaVersion": 1,
+  "kind": "matched-controller-comparison",
+  "status": "complete",
+  "createdAt": "2026-10-21T23:36:19.393832+00:00",
+  "protocol": {
+    "id": "g1-synthetic-matched-v1",
+    "seconds_per_episode": 5,
+    "references": [
+      "stand",
+      "arm_sweep"
+    ],
+    "controllers": [
+      "onnx",
+      "direct_pd"
+    ],
+    "conditions": [
+      {
+        "name": "nominal",
+        "seed": null
+      },
+      {
+        "name": "push_17",
+        "seed": 17
+      },
+      {
+        "name": "push_29",
+        "seed": 29
+      }
+    ],
+    "push_force_n": 60,
+    "push_intervals_s": [
+      [
+        1.0,
+        1.2
+      ],
+      [
+        3.0,
+        3.2
+      ]
+    ],
+    "push_body": "pelvis",
+    "push_frame": "world",
+    "push_direction_generator": "numpy.Generator(PCG64(seed)), two independent uniform angles in [0, 2*pi), zero vertical force and torque",
+    "physics_dt": 0.001,
+    "control_dt": 0.02,
+    "wall_limit_seconds_per_episode": 90,
+    "order": "reference then condition; alternate onnx-first and direct_pd-first by pair index",
+    "success": "All requested steps completed without a detected fall; not a tracking-accuracy success criterion.",
+    "fall": "Root below 0.45 m or pelvis tilt above 60 degrees for five consecutive control samples. Continue after falls.",
+    "early_termination": "Stop on non-finite output/state, numerical warning or per-episode wall budget; retain every attempted episode and explicit reason. Contract/setup errors abort with partial output retained.",
+    "aggregation": "Fall and failure rates use all six episodes per controller. Pool squared joint errors weighted by observed control samples, including fallen/partial episodes. No full-horizon error is reported unless all six episodes completed. No best-seed selection.",
+    "interpretation": "Fixed self-authored smoke comparison, not a published benchmark, statistical significance claim, training result or SOTA."
+  },
+  "protocolSha256": "54701a16747837083a891f160cd59c5f92f8caa62250181e8167f0fb4a3c3379",
+  "provenance": {
+    "repository": "https://github.com/NVlabs/ProtoMotions",
+    "revision": "f69fdcaabff31846b4d2247207417b57dc788828",
+    "model_license": "NVIDIA Open Model License, 2025-10-24",
+    "robot_license": "BSD-3-Clause, Unitree Robotics",
+    "source_license": "Apache-2.0",
+    "motion_data_downloaded": false,
+    "pickle_artifacts_downloaded": false,
+    "files": [
+      {
+        "path": "data/pretrained_models/motion_tracker/g1-bones-deploy/compiled_models/unified_pipeline.onnx",
+        "bytes": 22606590,
+        "sha256": "a59baa3e04a951e5cf0b4cc68f24ebaafa9272714226618b99a5017dfc805b4c"
+      },
+      {
+        "path": "data/pretrained_models/motion_tracker/g1-bones-deploy/compiled_models/unified_pipeline.yaml",
+        "bytes": 5918,
+        "sha256": "9b7896f3355a9d9d5e7d3139b83924eeb2e45c62c30bfda44afe996cfc6cf01c"
+      },
+      {
+        "path": "data/pretrained_models/motion_tracker/g1-bones-deploy/resolved_configs_inference.yaml",
+        "bytes": 46092,
+        "sha256": "d34c406e09cffd83db5d4712974c7fe1963980ced55d66416db4b5bab6d27ca6"
+      },
+      {
+        "path": "data/pretrained_models/motion_tracker/g1-bones-deploy/LICENSE.pdf",
+        "bytes": 79005,
+        "sha256": "4d2fb590aa9b30c47f2058bff17291df7fa2aa0c1bd775a20703da9bb267cfab"
+      },
+      {
+        "path": "data/pretrained_models/motion_tracker/g1-bones-deploy/NOTICE.txt",
+        "bytes": 67,
+        "sha256": "5fc60716a9ba57f3792e71ed776b4065671c64d0c2db716698f4d646ad833eb1"
+      },
+      {
+        "path": "data/pretrained_models/motion_tracker/g1-bones-deploy/MODEL_CARD.md",
+        "bytes": 3782,
+        "sha256": "61ec9836b3de457220c5e895306493bee7f9ff1db243d70b1b8f4afa06fdc2d8"
+      },
+      {
+        "path": "protomotions/data/assets/mjcf/g1_holo_compat.xml",
+        "bytes": 40649,
+        "sha256": "f9a455ff0b2822b3d3f68e55b02cd7e21c601a84cf3173237b7bfaf494492846"
+      },
+      {
+        "path": "protomotions/data/assets/mesh/G1/LICENSE",
+        "bytes": 1536,
+        "sha256": "61bfd0013f0bd1c32d49112610d3cca0ed592df3575cda79ffb198e751c91dfd"
+      },
+      {
+        "path": "LICENSE.md",
+        "bytes": 10172,
+        "sha256": "59899c6091b540582ed617e8eeaac4919dc985ccfc35459ee9752b699be5205b"
+      },
+      {
+        "path": "legal/THIRD-PARTY SOFTWARE NOTICES AND ASSET LICENSES - ProtoMotions.txt",
+        "bytes": 4481,
+        "sha256": "c912e2fd4276369fdc75472c05254d1985facb24eb0154d4d06006bdd9adf8e4"
+      }
+    ]
+  },
+  "sourceSha256": {
+    "evaluate.py": "4ef626aa31f554aa674bb6451ce6894a0e72cba124324b1d14b00e1816b9870e",
+    "rollout.py": "a28d0fbd94c649526531df6e45516c11fe7d486b3e9925d6106bd1b87d769dd6"
+  },
+  "runtime": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "packages": {
+      "numpy": "2.2.6",
+      "mujoco": "3.3.7",
+      "onnxruntime": "1.23.2",
+      "PyYAML": "6.0.3"
+    },
+    "provider": "CPUExecutionProvider",
+    "inference_threads": 1
+  },
+  "episodes": [
+    {
+      "name": "stand",
+      "controller": "onnx",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": false,
+        "first_fall_time_s": null,
+        "joint_rmse_rad": 0.15029140833117297,
+        "max_frame_joint_rms_rad": 0.1560214322693145,
+        "mean_body_position_error_m": 0.03980183826954743,
+        "min_root_height_m": 0.7590215736138018,
+        "max_pelvis_tilt_deg": 4.3351895025911995,
+        "fraction_frames_with_contacts": 0.9960159362549801,
+        "mean_inference_ms": 35.99574839985871,
+        "p95_inference_ms": 81.0866399993756,
+        "mean_control_ms": 40.642664000115474,
+        "mean_pd_target_change_l2_rad": 0.011705922237765717,
+        "wall_seconds": 20.796190599998226,
+        "simulation_to_wall_ratio": 0.24042864850452114,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "nominal",
+      "seed": null,
+      "pushes": []
+    },
+    {
+      "name": "stand",
+      "controller": "direct_pd",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": true,
+        "first_fall_time_s": 1.3800000000000001,
+        "joint_rmse_rad": 0.09664155969857953,
+        "max_frame_joint_rms_rad": 0.15269668302463235,
+        "mean_body_position_error_m": 0.7843445473589519,
+        "min_root_height_m": 0.0786676071025199,
+        "max_pelvis_tilt_deg": 106.02729200605265,
+        "fraction_frames_with_contacts": 0.9880478087649402,
+        "mean_inference_ms": null,
+        "p95_inference_ms": null,
+        "mean_control_ms": 0.0077604001853615046,
+        "mean_pd_target_change_l2_rad": 0.0,
+        "wall_seconds": 9.74131010000201,
+        "simulation_to_wall_ratio": 0.5132779830095922,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "nominal",
+      "seed": null,
+      "pushes": []
+    },
+    {
+      "name": "stand",
+      "controller": "direct_pd",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": true,
+        "first_fall_time_s": 1.36,
+        "joint_rmse_rad": 0.09902497108825208,
+        "max_frame_joint_rms_rad": 0.15351725481753736,
+        "mean_body_position_error_m": 0.8010782532322266,
+        "min_root_height_m": 0.07918167756200858,
+        "max_pelvis_tilt_deg": 105.36322885631222,
+        "fraction_frames_with_contacts": 0.9880478087649402,
+        "mean_inference_ms": null,
+        "p95_inference_ms": null,
+        "mean_control_ms": 0.0075348000100348145,
+        "mean_pd_target_change_l2_rad": 0.0,
+        "wall_seconds": 9.041261700000177,
+        "simulation_to_wall_ratio": 0.5530201608919142,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "push_17",
+      "seed": 17,
+      "pushes": [
+        {
+          "start_step": 50,
+          "end_step": 60,
+          "force_world_n": [
+            33.74831949261093,
+            -49.608980350584275,
+            0.0
+          ]
+        },
+        {
+          "start_step": 150,
+          "end_step": 160,
+          "force_world_n": [
+            31.839269779204866,
+            50.85529372569794,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "stand",
+      "controller": "onnx",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": false,
+        "first_fall_time_s": null,
+        "joint_rmse_rad": 0.1493524116837982,
+        "max_frame_joint_rms_rad": 0.16736291671555564,
+        "mean_body_position_error_m": 0.07372202157216617,
+        "min_root_height_m": 0.7590215736138018,
+        "max_pelvis_tilt_deg": 5.482478448212813,
+        "fraction_frames_with_contacts": 0.9960159362549801,
+        "mean_inference_ms": 44.380153199948836,
+        "p95_inference_ms": 109.68288500025645,
+        "mean_control_ms": 48.96262999997998,
+        "mean_pd_target_change_l2_rad": 0.06613948186074035,
+        "wall_seconds": 22.759917399998812,
+        "simulation_to_wall_ratio": 0.21968445280914162,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "push_17",
+      "seed": 17,
+      "pushes": [
+        {
+          "start_step": 50,
+          "end_step": 60,
+          "force_world_n": [
+            33.74831949261093,
+            -49.608980350584275,
+            0.0
+          ]
+        },
+        {
+          "start_step": 150,
+          "end_step": 160,
+          "force_world_n": [
+            31.839269779204866,
+            50.85529372569794,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "stand",
+      "controller": "onnx",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": false,
+        "first_fall_time_s": null,
+        "joint_rmse_rad": 0.14538998808409648,
+        "max_frame_joint_rms_rad": 0.16553634994817665,
+        "mean_body_position_error_m": 0.17843212554086077,
+        "min_root_height_m": 0.7590215736138018,
+        "max_pelvis_tilt_deg": 5.559259180374936,
+        "fraction_frames_with_contacts": 0.9960159362549801,
+        "mean_inference_ms": 49.147020800141036,
+        "p95_inference_ms": 125.2607700003861,
+        "mean_control_ms": 55.7775528000202,
+        "mean_pd_target_change_l2_rad": 0.1244056906614707,
+        "wall_seconds": 23.74837800000023,
+        "simulation_to_wall_ratio": 0.21054069461080466,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "push_29",
+      "seed": 29,
+      "pushes": [
+        {
+          "start_step": 50,
+          "end_step": 60,
+          "force_world_n": [
+            57.05791660326232,
+            18.557859598972133,
+            0.0
+          ]
+        },
+        {
+          "start_step": 150,
+          "end_step": 160,
+          "force_world_n": [
+            -59.9526659261731,
+            -2.3828236075469653,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "stand",
+      "controller": "direct_pd",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": true,
+        "first_fall_time_s": 1.34,
+        "joint_rmse_rad": 0.09960821247970741,
+        "max_frame_joint_rms_rad": 0.16516889276939556,
+        "mean_body_position_error_m": 0.8060149426713277,
+        "min_root_height_m": 0.07738786867923728,
+        "max_pelvis_tilt_deg": 104.5435629522985,
+        "fraction_frames_with_contacts": 0.9960159362549801,
+        "mean_inference_ms": null,
+        "p95_inference_ms": null,
+        "mean_control_ms": 0.06232880002062302,
+        "mean_pd_target_change_l2_rad": 0.0,
+        "wall_seconds": 8.689836600002309,
+        "simulation_to_wall_ratio": 0.5753848121837725,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "push_29",
+      "seed": 29,
+      "pushes": [
+        {
+          "start_step": 50,
+          "end_step": 60,
+          "force_world_n": [
+            57.05791660326232,
+            18.557859598972133,
+            0.0
+          ]
+        },
+        {
+          "start_step": 150,
+          "end_step": 160,
+          "force_world_n": [
+            -59.9526659261731,
+            -2.3828236075469653,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "arm_sweep",
+      "controller": "direct_pd",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": true,
+        "first_fall_time_s": 1.3800000000000001,
+        "joint_rmse_rad": 0.0978536967985875,
+        "max_frame_joint_rms_rad": 0.1505413694572268,
+        "mean_body_position_error_m": 0.7829242202696987,
+        "min_root_height_m": 0.07803148609959519,
+        "max_pelvis_tilt_deg": 105.74151849855998,
+        "fraction_frames_with_contacts": 0.9920318725099602,
+        "mean_inference_ms": null,
+        "p95_inference_ms": null,
+        "mean_control_ms": 0.009584399900631979,
+        "mean_pd_target_change_l2_rad": 0.004113658303545692,
+        "wall_seconds": 9.456986299999699,
+        "simulation_to_wall_ratio": 0.5287096588053807,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "nominal",
+      "seed": null,
+      "pushes": []
+    },
+    {
+      "name": "arm_sweep",
+      "controller": "onnx",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": false,
+        "first_fall_time_s": null,
+        "joint_rmse_rad": 0.1706449743880513,
+        "max_frame_joint_rms_rad": 0.20686046816055917,
+        "mean_body_position_error_m": 0.03787620416041832,
+        "min_root_height_m": 0.7590215736138018,
+        "max_pelvis_tilt_deg": 4.677611937290136,
+        "fraction_frames_with_contacts": 0.9960159362549801,
+        "mean_inference_ms": 40.85225040013029,
+        "p95_inference_ms": 109.4312849978449,
+        "mean_control_ms": 48.29675399980624,
+        "mean_pd_target_change_l2_rad": 0.015344685611191643,
+        "wall_seconds": 21.031024699997943,
+        "simulation_to_wall_ratio": 0.237744003029985,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "nominal",
+      "seed": null,
+      "pushes": []
+    },
+    {
+      "name": "arm_sweep",
+      "controller": "onnx",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": false,
+        "first_fall_time_s": null,
+        "joint_rmse_rad": 0.1595454547634706,
+        "max_frame_joint_rms_rad": 0.18844081219020523,
+        "mean_body_position_error_m": 0.07228486778184086,
+        "min_root_height_m": 0.7590215736138018,
+        "max_pelvis_tilt_deg": 5.817289807270664,
+        "fraction_frames_with_contacts": 0.9960159362549801,
+        "mean_inference_ms": 58.71992079986376,
+        "p95_inference_ms": 152.56947499947273,
+        "mean_control_ms": 66.736858400036,
+        "mean_pd_target_change_l2_rad": 0.07462877714370628,
+        "wall_seconds": 31.86697970000023,
+        "simulation_to_wall_ratio": 0.1569022244050309,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "push_17",
+      "seed": 17,
+      "pushes": [
+        {
+          "start_step": 50,
+          "end_step": 60,
+          "force_world_n": [
+            33.74831949261093,
+            -49.608980350584275,
+            0.0
+          ]
+        },
+        {
+          "start_step": 150,
+          "end_step": 160,
+          "force_world_n": [
+            31.839269779204866,
+            50.85529372569794,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "arm_sweep",
+      "controller": "direct_pd",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": true,
+        "first_fall_time_s": 1.36,
+        "joint_rmse_rad": 0.10017203817695285,
+        "max_frame_joint_rms_rad": 0.15137878674956642,
+        "mean_body_position_error_m": 0.8025277220359485,
+        "min_root_height_m": 0.07909587428973411,
+        "max_pelvis_tilt_deg": 104.75345977055825,
+        "fraction_frames_with_contacts": 0.9920318725099602,
+        "mean_inference_ms": null,
+        "p95_inference_ms": null,
+        "mean_control_ms": 0.11716399987926707,
+        "mean_pd_target_change_l2_rad": 0.004113658303545692,
+        "wall_seconds": 11.310480500000267,
+        "simulation_to_wall_ratio": 0.44206786793893343,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "push_17",
+      "seed": 17,
+      "pushes": [
+        {
+          "start_step": 50,
+          "end_step": 60,
+          "force_world_n": [
+            33.74831949261093,
+            -49.608980350584275,
+            0.0
+          ]
+        },
+        {
+          "start_step": 150,
+          "end_step": 160,
+          "force_world_n": [
+            31.839269779204866,
+            50.85529372569794,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "arm_sweep",
+      "controller": "direct_pd",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": true,
+        "first_fall_time_s": 1.34,
+        "joint_rmse_rad": 0.10033343056808842,
+        "max_frame_joint_rms_rad": 0.15573575199906958,
+        "mean_body_position_error_m": 0.8084716582386922,
+        "min_root_height_m": 0.0766391494875286,
+        "max_pelvis_tilt_deg": 104.49025409758201,
+        "fraction_frames_with_contacts": 0.9920318725099602,
+        "mean_inference_ms": null,
+        "p95_inference_ms": null,
+        "mean_control_ms": 0.018283600016729906,
+        "mean_pd_target_change_l2_rad": 0.004113658303545692,
+        "wall_seconds": 8.226034499999514,
+        "simulation_to_wall_ratio": 0.6078262861650161,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "push_29",
+      "seed": 29,
+      "pushes": [
+        {
+          "start_step": 50,
+          "end_step": 60,
+          "force_world_n": [
+            57.05791660326232,
+            18.557859598972133,
+            0.0
+          ]
+        },
+        {
+          "start_step": 150,
+          "end_step": 160,
+          "force_world_n": [
+            -59.9526659261731,
+            -2.3828236075469653,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "arm_sweep",
+      "controller": "onnx",
+      "termination": null,
+      "metrics": {
+        "requested_seconds": 5,
+        "control_steps": 250,
+        "controller_calls": 250,
+        "physics_steps": 5000,
+        "error_samples": 251,
+        "simulated_seconds": 5.0,
+        "completed": true,
+        "fell": false,
+        "first_fall_time_s": null,
+        "joint_rmse_rad": 0.1526311260714157,
+        "max_frame_joint_rms_rad": 0.18351356343573652,
+        "mean_body_position_error_m": 0.10882318347200208,
+        "min_root_height_m": 0.7590215736138018,
+        "max_pelvis_tilt_deg": 5.597147112022798,
+        "fraction_frames_with_contacts": 0.9960159362549801,
+        "mean_inference_ms": 38.62021200011077,
+        "p95_inference_ms": 93.89965500049568,
+        "mean_control_ms": 44.80876640007773,
+        "mean_pd_target_change_l2_rad": 0.127825970955971,
+        "wall_seconds": 19.232484600001044,
+        "simulation_to_wall_ratio": 0.25997681027649067,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "condition": "push_29",
+      "seed": 29,
+      "pushes": [
+        {
+          "start_step": 50,
+          "end_step": 60,
+          "force_world_n": [
+            57.05791660326232,
+            18.557859598972133,
+            0.0
+          ]
+        },
+        {
+          "start_step": 150,
+          "end_step": 160,
+          "force_world_n": [
+            -59.9526659261731,
+            -2.3828236075469653,
+            0.0
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "controller": "onnx",
+      "expected_episodes": 6,
+      "attempted_episodes": 6,
+      "completed_episodes": 6,
+      "successes": 6,
+      "falls": 0,
+      "failures": 0,
+      "early_terminations": 0,
+      "fall_rate": 0.0,
+      "failure_rate": 0.0,
+      "observed_error_samples": 1506,
+      "observed_joint_rmse_rad": 0.15486694234860537,
+      "full_horizon_joint_rmse_rad": 0.15486694234860537,
+      "observed_mean_body_error_m": 0.0851567067994726,
+      "simulated_seconds": 30.0,
+      "wall_seconds": 139.43497499999648
+    },
+    {
+      "controller": "direct_pd",
+      "expected_episodes": 6,
+      "attempted_episodes": 6,
+      "completed_episodes": 6,
+      "successes": 0,
+      "falls": 6,
+      "failures": 6,
+      "early_terminations": 0,
+      "fall_rate": 1.0,
+      "failure_rate": 1.0,
+      "observed_error_samples": 1506,
+      "observed_joint_rmse_rad": 0.09894772395280417,
+      "full_horizon_joint_rmse_rad": 0.09894772395280417,
+      "observed_mean_body_error_m": 0.7975602239678076,
+      "simulated_seconds": 30.0,
+      "wall_seconds": 56.46590970000398
+    }
+  ],
+  "finishedAt": "2026-10-21T23:39:40.418910+00:00"
+}

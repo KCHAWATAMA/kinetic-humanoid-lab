@@ -6,6 +6,8 @@ A local, interactive 3D humanoid playground with analytic limb inverse kinematic
 
 **A separate pretrained-physics checkpoint now runs actual G1 control in CPU MuJoCo.** Two 10-second synthetic-reference trials completed without detected falls. Its [recorded browser replay](physics.html) shows real simulation body transforms and tracking errors; it is not live browser inference. See [the reproduction guide and measured results](research/README.md). Model weights stay in an ignored local cache, not in the repository or web bundle.
 
+**A fixed matched comparison now includes the failures too.** Across six five-second cases per controller (two references, nominal and two seeded push conditions), pretrained ONNX had 0/6 falls and direct PD had 6/6. Direct PD nevertheless had **lower joint RMSE and shorter wall time**. The physics page includes every episode, pooled errors and full protocol provenance; this is a small synthetic comparison, not a published benchmark.
+
 ![Kinetic desktop demo, captured by the software-rendered browser smoke test](docs/demo.png)
 
 ![Recorded pretrained G1 physics, with simulated and reference skeletons](docs/physics-demo.png)
@@ -29,6 +31,8 @@ npm run preview
 Open **http://127.0.0.1:4173**. The server binds to loopback, not the public network. Stop it with Ctrl+C. After dependency installation the app makes no external asset, font, model, analytics, or API requests.
 
 The measured physics replay is at **http://127.0.0.1:4173/physics.html**. Viewing its committed data requires no Python installation. Reproducing the policy rollout requires the separate optional [Python 3.11 CPU environment](research/README.md).
+
+The same page's comparison section reads `public/physics-comparison.json`, separate from the unchanged ten-second replay. Reproduce its fixed twelve-episode matrix with `research\.venv\Scripts\python.exe research\evaluate.py` after following the Python setup guide.
 
 ## Explore
 
@@ -70,11 +74,11 @@ The numerical tests print their measured maxima and enforce these thresholds:
 | Gait boundary continuity | Stance/swing and cycle boundaries | Position difference < 0.0000001 m |
 | Pause, reset, replay | Identical input sequences | Exact deterministic state equality |
 
-Browser tests run serially to limit memory use, with a bounded four-minute timeout per test for loaded machines. They use Chromium's software WebGL backend so the smoke test does not depend on a dedicated GPU. They exercise all motion modes, pause/reset, tempo, steering, target reach limits, direct target dragging, keyboard pause, overlay, export and mobile layout, plus physics replay selection, scrubbing, pause/reset, reference overlay, mobile layout and an explicit missing-data error. Screenshots are written to `test-results/kinetic-desktop.png`, `test-results/kinetic-mobile.png` and `test-results/kinetic-physics.png`. Both viewers redraw paused scenes only after interaction or a camera/viewport change. The exported FPS counts actual renders, so it can drop to zero while paused; it is not a promised hardware-independent rate.
+Browser tests run serially to limit memory use, with a bounded four-minute timeout per test for loaded machines. They use Chromium's software WebGL backend so the smoke test does not depend on a dedicated GPU. They exercise all motion modes, pause/reset, tempo, steering, target reach limits, direct target dragging, keyboard pause, overlay, export and mobile layout, plus physics replay controls, all comparison rows including failures, responsive tables, and explicit missing/unfinished-data errors. Screenshots are written to `test-results/kinetic-desktop.png`, `test-results/kinetic-mobile.png`, `test-results/kinetic-physics.png` and `test-results/kinetic-comparison.png`. Both viewers redraw paused scenes only after interaction or a camera/viewport change. The exported FPS counts actual renders, so it can drop to zero while paused; it is not a promised hardware-independent rate.
 
 ### Recorded local run (21 October 2026)
 
-Node 24.22.1 and Python 3.11.9 on Windows: **6 kinematics tests, 5 deployment/replay tests and 5 browser tests passed**, and the TypeScript / Vite production build passed. The final browser suite took about 3.2 minutes with one worker and software rendering; trace recording is disabled to avoid memory-heavy screenshots during every action. Earlier attempts timed out under host load; paused-scene redraw reduction and the bounded slow-host timeout allowed the complete suite to pass.
+Node 24.22.1 and Python 3.11.9 on Windows: **6 kinematics tests, 12 deployment/replay/comparison tests and 7 browser tests passed**, and the TypeScript / Vite production build passed. The final browser suite took about 3.7 minutes with one worker and software rendering; trace recording is disabled to avoid memory-heavy screenshots during every action. Earlier checkpoint attempts timed out under host load; paused-scene redraw reduction and the bounded slow-host timeout allowed the complete suite to pass.
 
 | Measured diagnostic | Maximum |
 | --- | --- |
@@ -83,7 +87,7 @@ Node 24.22.1 and Python 3.11.9 on Windows: **6 kinematics tests, 5 deployment/re
 | Stance endpoint height error, 19,200 poses | 1.39e-16 m |
 | Straight-line stance slide per step, 7,200 steps | 2.07e-15 m |
 
-These near-machine-precision results are expected for an analytic geometric construction. They do **not** measure physical stability, contact forces, learned-motion quality, or benchmark success rate. The live scene reported 7,938 rendered triangles and 43 draw calls in one sampled pose. Software-rendered screenshot runs were substantially slower than the embedded browser, which sampled approximately 60 FPS; neither is a controlled performance benchmark. Vite emits a non-fatal bundle-size advisory for the shared Three.js chunk (505 kB minified / 126 kB gzip); the playground and replay entry scripts are about 20 and 10 kB respectively.
+These near-machine-precision results are expected for an analytic geometric construction. They do **not** measure physical stability, contact forces, learned-motion quality, or benchmark success rate. The live scene reported 7,938 rendered triangles and 43 draw calls in one sampled pose. Software-rendered screenshot runs were substantially slower than the embedded browser, which sampled approximately 60 FPS; neither is a controlled performance benchmark. Vite emits a non-fatal bundle-size advisory for the shared Three.js chunk (505 kB minified / 126 kB gzip); the playground and replay/comparison entry scripts are about 20 and 16 kB respectively.
 
 ## Playground limitations
 
@@ -117,6 +121,21 @@ The `g1_bones_seed_mini` dataset was **not downloaded or used** because the user
 
 That tracker consumes reference motion, not text; its 29-action mapping, PD gains, observation history and joint ordering must match the deployment contract. The source is Apache-2.0; weights use the NVIDIA Open Model License, with separate robot and motion-data terms. SMPL MaskedMimic checkpoints are IsaacLab-only and should not be confused with this G1 deployment route. Before claiming progress toward published results, reproduce a named physical benchmark with a pinned model/data version, episode count, tracking errors, failure definition, runtime, and hardware.
 
+### Matched reference-PD comparison
+
+The fixed protocol adds two 60 N, 0.2-second horizontal pelvis pushes at 1 s and 3 s, with PCG64 seeds 17 and 29, alongside nominal cases. Both controllers share the same physics, gains, effort limits, initial state and references. Direct PD sends current reference joint positions to the actuators without learned balance correction. All twelve trials completed five seconds, including the six that fell; none terminated early or produced numerical warnings.
+
+| Across six cases per controller | Pretrained ONNX | Direct PD |
+| --- | ---: | ---: |
+| Completed without a detected fall | 6 / 6 | 0 / 6 |
+| Pooled joint RMSE | 0.154867 rad | 0.098948 rad |
+| Mean body-origin error | 0.085157 m | 0.797560 m |
+| Total simulated / loop wall time | 30 / 139.43 s | 30 / 56.47 s |
+
+Direct PD was faster and had lower joint-angle error, but fell even without pushes. The learned controller stayed upright, but did not perfectly track world position. This is evidence against treating joint error alone as physical success, not proof of general superiority or a calibrated robustness benchmark. [All cases and accounting rules](research/README.md#fixed-matched-comparison) include failures, truncated-run handling and exact provenance.
+
+![Recorded matched-controller comparison, including every failed episode](docs/comparison.png)
+
 ## Structure
 
 ```text
@@ -126,6 +145,8 @@ src/style.css            Responsive laboratory interface
 src/physics.ts           Viewer for recorded CPU policy/physics results
 research/                Optional pinned CPU inference runner and contract tests
 public/physics-replay.json Measured rollout output (no weights or motion dataset)
+research/evaluate.py     Fixed paired-controller comparison and aggregation
+public/physics-comparison.json All twelve measured comparison cases and protocol
 tests/kinematics.test.ts Numerical invariants and motion checks
 tests/browser.spec.ts    Browser controls, reach interaction and screenshots
 tests/physics.spec.ts    Recorded replay controls and explicit missing-data error

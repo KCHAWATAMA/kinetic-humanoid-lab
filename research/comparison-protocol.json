@@ -1,0 +1,25 @@
+{
+  "id": "g1-synthetic-matched-v1",
+  "seconds_per_episode": 5,
+  "references": ["stand", "arm_sweep"],
+  "controllers": ["onnx", "direct_pd"],
+  "conditions": [
+    {"name": "nominal", "seed": null},
+    {"name": "push_17", "seed": 17},
+    {"name": "push_29", "seed": 29}
+  ],
+  "push_force_n": 60,
+  "push_intervals_s": [[1.0, 1.2], [3.0, 3.2]],
+  "push_body": "pelvis",
+  "push_frame": "world",
+  "push_direction_generator": "numpy.Generator(PCG64(seed)), two independent uniform angles in [0, 2*pi), zero vertical force and torque",
+  "physics_dt": 0.001,
+  "control_dt": 0.02,
+  "wall_limit_seconds_per_episode": 90,
+  "order": "reference then condition; alternate onnx-first and direct_pd-first by pair index",
+  "success": "All requested steps completed without a detected fall; not a tracking-accuracy success criterion.",
+  "fall": "Root below 0.45 m or pelvis tilt above 60 degrees for five consecutive control samples. Continue after falls.",
+  "early_termination": "Stop on non-finite output/state, numerical warning or per-episode wall budget; retain every attempted episode and explicit reason. Contract/setup errors abort with partial output retained.",
+  "aggregation": "Fall and failure rates use all six episodes per controller. Pool squared joint errors weighted by observed control samples, including fallen/partial episodes. No full-horizon error is reported unless all six episodes completed. No best-seed selection.",
+  "interpretation": "Fixed self-authored smoke comparison, not a published benchmark, statistical significance claim, training result or SOTA."
+}

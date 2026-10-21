@@ -14,6 +14,19 @@ type Replay = {
   bodyNames: string[]; parents: number[]; cases: Trial[];
   provenance: { revision: string };
 };
+type ComparisonEpisode = {
+  name: string; condition: string; controller: "onnx" | "direct_pd"; termination: string | null;
+  metrics: {
+    completed: boolean; fell: boolean; simulated_seconds: number; first_fall_time_s: number | null;
+    joint_rmse_rad: number; mean_body_position_error_m: number; wall_seconds: number;
+  };
+};
+type ComparisonSummary = {
+  controller: "onnx" | "direct_pd"; attempted_episodes: number; completed_episodes: number;
+  successes: number; falls: number; early_terminations: number; observed_joint_rmse_rad: number;
+  observed_mean_body_error_m: number; simulated_seconds: number; wall_seconds: number;
+};
+type Comparison = { protocolSha256: string; episodes: ComparisonEpisode[]; summary: ComparisonSummary[] };
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 function assertReplay(value: unknown): asserts value is Replay {
@@ -38,6 +51,46 @@ function assertReplay(value: unknown): asserts value is Replay {
         || ![frame.body, frame.reference].every(points => Array.isArray(points) && points.length === 33
           && points.every(p => Array.isArray(p) && p.length === 3 && p.every(finite)))) throw new Error("Invalid sampled physics state");
       previousTime = frame.time;
+    }
+  }
+}
+
+function assertComparison(value: unknown): asserts value is Comparison {
+  if (!record(value) || value.schemaVersion !== 1 || value.kind !== "matched-controller-comparison" || value.status !== "complete"
+    || typeof value.protocolSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.protocolSha256)
+    || !record(value.protocol) || value.protocol.id !== "g1-synthetic-matched-v1"
+    || !Array.isArray(value.episodes) || value.episodes.length !== 12
+    || !Array.isArray(value.summary) || value.summary.length !== 2) throw new Error("Comparison is incomplete or has an unsupported schema");
+  const keys = new Set<string>();
+  for (const episode of value.episodes) {
+    if (!record(episode) || !["stand", "arm_sweep"].includes(String(episode.name))
+      || !["nominal", "push_17", "push_29"].includes(String(episode.condition))
+      || !["onnx", "direct_pd"].includes(String(episode.controller))
+      || !(episode.termination === null || typeof episode.termination === "string")
+      || !record(episode.metrics)) throw new Error("Invalid comparison episode");
+    const metrics = episode.metrics;
+    if (typeof metrics.completed !== "boolean" || typeof metrics.fell !== "boolean"
+      || !(metrics.first_fall_time_s === null || finite(metrics.first_fall_time_s))
+      || metrics.fell !== (metrics.first_fall_time_s !== null)
+      || !["simulated_seconds", "joint_rmse_rad", "mean_body_position_error_m", "wall_seconds"].every(key => finite(metrics[key]) && metrics[key] >= 0)
+      || !finite(metrics.simulated_seconds) || metrics.simulated_seconds > 5
+      || (metrics.completed && metrics.simulated_seconds !== 5)) {
+      throw new Error("Invalid comparison measurements");
+    }
+    keys.add(`${episode.name}/${episode.condition}/${episode.controller}`);
+  }
+  if (keys.size !== 12) throw new Error("Comparison contains missing or duplicate matched cases");
+  for (const [index, summary] of value.summary.entries()) {
+    if (!record(summary) || summary.controller !== ["onnx", "direct_pd"][index]
+      || !["attempted_episodes", "completed_episodes", "successes", "falls", "early_terminations",
+        "observed_joint_rmse_rad", "observed_mean_body_error_m", "simulated_seconds", "wall_seconds"].every(key => finite(summary[key]))
+      || summary.attempted_episodes !== 6) throw new Error("Invalid comparison summary");
+    const episodes = value.episodes.filter(episode => episode.controller === summary.controller);
+    const completed = episodes.filter(episode => episode.metrics.completed).length;
+    if (summary.completed_episodes !== completed || summary.early_terminations !== 6 - completed
+      || summary.falls !== episodes.filter(episode => episode.metrics.fell).length
+      || summary.successes !== episodes.filter(episode => episode.metrics.completed && !episode.metrics.fell).length) {
+      throw new Error("Comparison summary disagrees with its episodes");
     }
   }
 }
@@ -68,6 +121,20 @@ app.innerHTML = `
     </aside>
     <footer class="physics-transport"><button id="physics-pause" disabled>Pause replay</button><button id="physics-reset" disabled>Restart</button><label for="physics-scrub">Recorded time</label><input id="physics-scrub" type="range" min="0" max="10" step="0.04" value="0" disabled /><output id="physics-time">0.00 s</output></footer>
   </main>
+  <section class="comparison-section" aria-labelledby="comparison-heading">
+    <div class="eyebrow">EXPERIMENT 003 / MATCHED CPU COMPARISON</div>
+    <h2 id="comparison-heading">Same references. Different outcomes.</h2>
+    <p class="comparison-description">Recorded measurements, not live inference. Two controllers, two self-authored references, three conditions, five seconds each. Both use identical physics, PD gains, effort limits and seeded pelvis pushes.</p>
+    <p id="comparison-status" role="status">Loading measured comparison...</p>
+    <div id="comparison-error" role="alert" hidden></div>
+    <div id="comparison-summary" class="comparison-summary"></div>
+    <div class="comparison-table-scroll" tabindex="0" aria-label="All twelve measured episodes; scroll horizontally on narrow screens">
+      <table id="comparison-table"><caption>Every episode, including falls and early terminations</caption><thead><tr><th>Reference / condition</th><th>Controller</th><th>Completed time</th><th>Outcome</th><th>Joint RMSE</th><th>Mean body error</th><th>Loop wall time</th></tr></thead><tbody></tbody></table>
+    </div>
+    <p class="comparison-description">Each push is 60 N horizontally for 0.2 s at 1 s and 3 s (PCG64 seeds 17 and 29). Nominal cases have no pushes. A fall does not end a trial. Success here means completion without a detected fall, not accurate tracking. Joint errors can remain small even when the robot falls.</p>
+    <p class="comparison-description">Pooled errors include all observed samples, including falls and truncated trials; early terminations are shown explicitly. No full-horizon comparison is implied if any episode is truncated. Twelve synthetic episodes cannot establish statistical superiority, generalization or state-of-the-art performance. Wall times include host load.</p>
+    <a href="./physics-comparison.json" download class="replay-download comparison-download">Download complete comparison and fixed protocol &#8599;</a>
+  </section>
   <div id="physics-error-banner" role="alert" hidden></div>`;
 
 function node<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -80,6 +147,47 @@ function fail(error: unknown) {
   node("physics-error-banner").hidden = false;
   node("physics-error-banner").textContent = `Physics replay unavailable: ${error instanceof Error ? error.message : String(error)}. Generate the recorded file with research/rollout.py, then rebuild.`;
   node("physics-status").textContent = "REPLAY UNAVAILABLE";
+}
+
+async function loadComparison() {
+  const response = await fetch("./physics-comparison.json");
+  if (!response.ok) throw new Error(`Comparison request failed (${response.status})`);
+  const comparison: unknown = await response.json();
+  assertComparison(comparison);
+  const label = (controller: string) => controller === "onnx" ? "Pretrained ONNX" : "Direct PD";
+  for (const summary of comparison.summary) {
+    const card = document.createElement("article");
+    card.className = "comparison-card";
+    card.innerHTML = `<h3>${label(summary.controller)}</h3>
+      <dl><div><dt>Completed without fall</dt><dd>${summary.successes} / 6</dd></div>
+      <div><dt>Detected falls</dt><dd>${summary.falls} / 6</dd></div>
+      <div><dt>Early terminations</dt><dd>${summary.early_terminations} / 6</dd></div>
+      <div><dt>Pooled observed joint RMSE</dt><dd>${summary.observed_joint_rmse_rad.toFixed(4)} rad</dd></div>
+      <div><dt>Mean observed body error</dt><dd>${(summary.observed_mean_body_error_m * 100).toFixed(2)} cm</dd></div>
+      <div><dt>Total valid simulated time</dt><dd>${summary.simulated_seconds.toFixed(2)} s</dd></div>
+      <div><dt>Total loop wall time</dt><dd>${summary.wall_seconds.toFixed(2)} s</dd></div></dl>`;
+    node("comparison-summary").append(card);
+  }
+  const body = node<HTMLTableElement>("comparison-table").tBodies[0];
+  for (const episode of comparison.episodes) {
+    const metrics = episode.metrics;
+    const row = body.insertRow();
+    row.dataset.controller = episode.controller;
+    row.dataset.failed = String(!metrics.completed || metrics.fell);
+    const outcomes = [
+      metrics.fell ? `FALL at ${metrics.first_fall_time_s?.toFixed(2)} s` : "No detected fall",
+      ...(metrics.completed ? [] : [`EARLY: ${episode.termination ?? "incomplete"}`]),
+    ];
+    const values = [
+      `${episode.name === "stand" ? "Stand" : "Arm sweep"} / ${episode.condition.replace("_", " ")}`,
+      label(episode.controller), `${metrics.simulated_seconds.toFixed(2)} / 5 s`, outcomes.join("; "),
+      `${metrics.joint_rmse_rad.toFixed(4)} rad`, `${(metrics.mean_body_position_error_m * 100).toFixed(2)} cm`,
+      `${metrics.wall_seconds.toFixed(2)} s`,
+    ];
+    for (const value of values) row.insertCell().textContent = value;
+  }
+  const early = comparison.summary.reduce((total, summary) => total + summary.early_terminations, 0);
+  node("comparison-status").textContent = `12 recorded episodes / ${early} early terminations / fixed protocol ${comparison.protocolSha256.slice(0, 12)}`;
 }
 
 async function start() {
@@ -242,3 +350,9 @@ declare global {
   }
 }
 start().catch(fail);
+loadComparison().catch(error => {
+  console.error(error);
+  node("comparison-status").textContent = "COMPARISON UNAVAILABLE";
+  node("comparison-error").hidden = false;
+  node("comparison-error").textContent = `Measured comparison unavailable: ${error instanceof Error ? error.message : String(error)}. The ten-second replay is separate; no comparison results have been invented.`;
+});
