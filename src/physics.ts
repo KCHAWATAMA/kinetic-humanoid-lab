@@ -1,0 +1,244 @@
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import "./style.css";
+import "./physics.css";
+
+type Point = [number, number, number];
+type Frame = {
+  time: number; body: Point[]; reference: Point[]; jointRmsRad: number;
+  rootHeightM: number; contacts: number; fallen: boolean;
+};
+type Trial = { name: string; metrics: Record<string, number | boolean | null>; frames: Frame[] };
+type Replay = {
+  schemaVersion: number; kind: string; policy: string; reference: string; createdAt: string;
+  bodyNames: string[]; parents: number[]; cases: Trial[];
+  provenance: { revision: string };
+};
+const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+function assertReplay(value: unknown): asserts value is Replay {
+  if (!record(value) || value.schemaVersion !== 1 || value.kind !== "recorded-pretrained-policy-physics"
+    || typeof value.policy !== "string" || typeof value.reference !== "string" || typeof value.createdAt !== "string"
+    || !record(value.provenance) || typeof value.provenance.revision !== "string"
+    || !Array.isArray(value.bodyNames) || value.bodyNames.length !== 33 || !value.bodyNames.every(n => typeof n === "string")
+    || !Array.isArray(value.parents) || value.parents.length !== 33
+    || !value.parents.every((n, i) => Number.isInteger(n) && (i === 0 ? n === -1 : n >= 0 && n < i))
+    || !Array.isArray(value.cases) || value.cases.length === 0) throw new Error("Unsupported physics replay schema");
+  for (const trial of value.cases) {
+    if (!record(trial) || typeof trial.name !== "string" || !record(trial.metrics)
+      || !Array.isArray(trial.frames) || trial.frames.length < 2) throw new Error("Invalid rollout metrics or frames");
+    const metrics = trial.metrics;
+    if (!["simulated_seconds", "joint_rmse_rad", "mean_inference_ms", "min_root_height_m"].every(key => finite(metrics[key]))
+      || typeof metrics.fell !== "boolean" || typeof metrics.completed !== "boolean"
+      || !Object.values(metrics).every(item => item === null || typeof item === "boolean" || finite(item))) throw new Error("Invalid rollout metrics");
+    let previousTime = -1;
+    for (const frame of trial.frames) {
+      if (!record(frame) || !finite(frame.time) || frame.time <= previousTime || !finite(frame.jointRmsRad)
+        || !finite(frame.rootHeightM) || !finite(frame.contacts) || typeof frame.fallen !== "boolean"
+        || ![frame.body, frame.reference].every(points => Array.isArray(points) && points.length === 33
+          && points.every(p => Array.isArray(p) && p.length === 3 && p.every(finite)))) throw new Error("Invalid sampled physics state");
+      previousTime = frame.time;
+    }
+  }
+}
+
+const app = document.querySelector<HTMLDivElement>("#physics-app")!;
+app.innerHTML = `
+  <header class="topbar"><a class="brand" href="./"><span class="brand-mark">K</span>KINETIC <span class="brand-divider">/</span><span class="brand-sub">PHYSICS CHECKPOINT</span></a><a class="back-link" href="./">Kinematic playground &#8599;</a></header>
+  <main class="physics-layout">
+    <section class="physics-stage" aria-label="Recorded G1 physics replay">
+      <div id="physics-scene"></div>
+      <div class="physics-overlay"><div class="eyebrow">EXPERIMENT 002 / PRETRAINED INFERENCE</div><h1>From poses<br>to <em>physics.</em></h1><p>Recorded MuJoCo body transforms.<br>Actual pretrained actions. No browser inference.</p></div>
+      <span id="physics-status" class="physics-status">LOADING VERIFIED ROLLOUT</span>
+      <div class="physics-legend"><span>TEAL / SIMULATED G1</span><span>AMBER / REFERENCE</span></div>
+    </section>
+    <aside class="physics-details">
+      <div class="eyebrow">CPU POLICY CHECK</div><h2>Pretrained, not pretended.</h2>
+      <p id="policy-name"></p>
+      <p class="physics-note">A 29-action NVIDIA tracker drove a floating-base G1 in CPU MuJoCo. This player shows the saved result, including tracking errors and any falls.</p>
+      <label for="physics-case">Self-authored reference</label><select id="physics-case" disabled></select>
+      <label class="ghost-label"><input id="physics-ghost" type="checkbox" checked /> Show reference skeleton</label>
+      <div class="physics-summary"><span id="completion">--</span><span id="fall-result">--</span></div>
+      <div class="metric"><span>TRIAL JOINT RMSE</span><div><output id="trial-error">--</output><small>rad</small></div><p>Across all 29 joints and control samples</p></div>
+      <div class="metric"><span>MEAN CPU INFERENCE</span><div><output id="inference-time">--</output><small>ms</small></div><p>One ONNX Runtime thread</p></div>
+      <div class="physics-live"><span>FRAME ROOT HEIGHT <output id="physics-height">--</output></span><span>FRAME JOINT RMS <output id="physics-error">--</output></span><span>CONTACT CONSTRAINTS <output id="physics-contacts">--</output></span></div>
+      <p class="physics-note">Two synthetic references are smoke tests, <strong>not a published benchmark or proof of generalization</strong>. No BONES motion files, unsafe pickle loads, training, or real robot were used.</p>
+      <a href="./physics-replay.json" download class="replay-download">Download measured rollout JSON &#8599;</a>
+      <p id="physics-provenance" class="physics-provenance"></p>
+    </aside>
+    <footer class="physics-transport"><button id="physics-pause" disabled>Pause replay</button><button id="physics-reset" disabled>Restart</button><label for="physics-scrub">Recorded time</label><input id="physics-scrub" type="range" min="0" max="10" step="0.04" value="0" disabled /><output id="physics-time">0.00 s</output></footer>
+  </main>
+  <div id="physics-error-banner" role="alert" hidden></div>`;
+
+function node<T extends HTMLElement = HTMLElement>(id: string): T {
+  const found = document.getElementById(id);
+  if (!found) throw new Error(`Missing element ${id}`);
+  return found as T;
+}
+function fail(error: unknown) {
+  console.error(error);
+  node("physics-error-banner").hidden = false;
+  node("physics-error-banner").textContent = `Physics replay unavailable: ${error instanceof Error ? error.message : String(error)}. Generate the recorded file with research/rollout.py, then rebuild.`;
+  node("physics-status").textContent = "REPLAY UNAVAILABLE";
+}
+
+async function start() {
+  const response = await fetch("./physics-replay.json");
+  if (!response.ok) throw new Error(`Rollout request failed (${response.status})`);
+  const payload: unknown = await response.json();
+  assertReplay(payload);
+  const replay: Replay = payload;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color("#0c151c");
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  const host = node("physics-scene");
+  host.append(renderer.domElement);
+  renderer.domElement.setAttribute("aria-label", "Recorded floating-base G1 physics and reference skeleton");
+  renderer.domElement.setAttribute("role", "img");
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 40);
+  camera.position.set(2.6, 1.9, 3.4);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  let needsRender = true;
+  const invalidate = () => { needsRender = true; };
+  controls.addEventListener("change", invalidate);
+  for (const event of ["input", "change", "click"]) app.addEventListener(event, invalidate);
+  controls.target.set(0, 0.7, 0);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minDistance = 1.8;
+  controls.maxDistance = 8;
+  scene.add(new THREE.HemisphereLight("#dafef2", "#142329", 3));
+  const light = new THREE.DirectionalLight("#ffffff", 2);
+  light.position.set(2, 5, 3);
+  scene.add(light);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshStandardMaterial({ color: "#172b33", roughness: 1 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -0.02;
+  scene.add(floor);
+  const grid = new THREE.GridHelper(20, 40, "#567577", "#31454e");
+  scene.add(grid);
+  const cylinder = new THREE.CylinderGeometry(0.025, 0.025, 1, 10);
+  const sphere = new THREE.SphereGeometry(0.037, 12, 8);
+  const mint = new THREE.MeshStandardMaterial({ color: "#a1f1cd", metalness: 0.35, roughness: 0.3 });
+  const joints = replay.bodyNames.map((_, i) => {
+    const joint = new THREE.Mesh(sphere, mint);
+    if (i === 1) joint.scale.setScalar(2.4);
+    scene.add(joint);
+    return joint;
+  });
+  const bones = replay.parents.map(parent => {
+    if (parent < 0) return null;
+    const bone = new THREE.Mesh(cylinder, mint);
+    scene.add(bone);
+    return bone;
+  });
+  const ghostPositions = new Float32Array((replay.parents.length - 1) * 6);
+  const ghostGeometry = new THREE.BufferGeometry();
+  ghostGeometry.setAttribute("position", new THREE.BufferAttribute(ghostPositions, 3));
+  const ghost = new THREE.LineSegments(ghostGeometry, new THREE.LineBasicMaterial({ color: "#ffbd69", transparent: true, opacity: 0.8, depthTest: false }));
+  ghost.renderOrder = 3;
+  scene.add(ghost);
+  const point = (p: Point) => new THREE.Vector3(p[0], p[2], -p[1]);
+  const up = new THREE.Vector3(0, 1, 0);
+  let trial = replay.cases[0], time = 0, paused = false, rendered = false;
+  const select = node<HTMLSelectElement>("physics-case");
+  for (const item of replay.cases) {
+    const option = document.createElement("option");
+    option.value = item.name;
+    option.textContent = item.name === "stand" ? "Grounded nominal stand" : "Slow symmetric arm sweep";
+    select.append(option);
+  }
+  function setSummary() {
+    node("trial-error").textContent = Number(trial.metrics.joint_rmse_rad).toFixed(4);
+    node("inference-time").textContent = Number(trial.metrics.mean_inference_ms).toFixed(2);
+    node("completion").textContent = trial.metrics.completed ? `${Number(trial.metrics.simulated_seconds).toFixed(1)} s completed` : "Incomplete rollout";
+    node("fall-result").textContent = trial.metrics.fell ? "FALL DETECTED" : "No fall detected";
+    node("fall-result").classList.toggle("warning", Boolean(trial.metrics.fell));
+    node<HTMLInputElement>("physics-scrub").max = String(trial.frames.at(-1)!.time);
+  }
+  select.addEventListener("change", () => { trial = replay.cases.find(item => item.name === select.value)!; time = 0; setSummary(); });
+  node("policy-name").textContent = replay.policy;
+  node("physics-provenance").textContent = `Source ${replay.provenance.revision.slice(0, 12)} / recorded ${replay.createdAt.slice(0, 10)}. Model: NVIDIA Open Model License. Robot: Unitree BSD-3-Clause.`;
+  node<HTMLInputElement>("physics-ghost").addEventListener("change", event => { ghost.visible = (event.target as HTMLInputElement).checked; });
+  function setPaused(value: boolean) {
+    paused = value;
+    node("physics-pause").textContent = paused ? "Play replay" : "Pause replay";
+  }
+  node("physics-pause").addEventListener("click", () => setPaused(!paused));
+  node("physics-reset").addEventListener("click", () => { time = 0; });
+  node<HTMLInputElement>("physics-scrub").addEventListener("input", event => {
+    time = Number((event.target as HTMLInputElement).value);
+    setPaused(true);
+  });
+  for (const id of ["physics-case", "physics-pause", "physics-reset", "physics-scrub"]) node<HTMLButtonElement>(id).disabled = false;
+  function resize() {
+    renderer.setSize(host.clientWidth, host.clientHeight);
+    camera.aspect = host.clientWidth / host.clientHeight;
+    camera.updateProjectionMatrix();
+    invalidate();
+  }
+  new ResizeObserver(resize).observe(host);
+  resize();
+  setSummary();
+  let last: number | undefined, running = true;
+  renderer.domElement.addEventListener("webglcontextlost", event => {
+    event.preventDefault();
+    running = false;
+    rendered = false;
+    fail(new Error("WebGL context lost; reload to restart"));
+  });
+  window.physicsReplay = { snapshot: () => ({ ready: rendered, case: trial.name, time, paused, kind: replay.kind, frameCount: trial.frames.length }) };
+  function animate(now: number) {
+    if (!running) return;
+    try {
+      const elapsed = last === undefined ? 0 : (now - last) / 1000;
+      last = now;
+      const duration = trial.frames.at(-1)!.time;
+      if (!paused) time = (time + Math.min(elapsed, 0.1)) % duration;
+      const index = Math.min(trial.frames.length - 1, Math.floor(time / duration * (trial.frames.length - 1)));
+      const frame = trial.frames[index];
+      let offset = 0;
+      frame.body.forEach((p, i) => {
+        const current = point(p);
+        joints[i].position.copy(current);
+        const parent = replay.parents[i];
+        const bone = bones[i];
+        if (parent >= 0 && bone) {
+          const start = point(frame.body[parent]);
+          const delta = current.clone().sub(start);
+          bone.position.copy(start).add(current).multiplyScalar(0.5);
+          bone.scale.y = delta.length();
+          bone.visible = delta.length() > 1e-6;
+          if (bone.visible) bone.quaternion.setFromUnitVectors(up, delta.normalize());
+          const a = point(frame.reference[parent]), b = point(frame.reference[i]);
+          ghostPositions.set([...a.toArray(), ...b.toArray()], offset);
+          offset += 6;
+        }
+      });
+      ghostGeometry.attributes.position.needsUpdate = true;
+      ghostGeometry.computeBoundingSphere();
+      controls.update();
+      if (!paused || needsRender) {
+        renderer.render(scene, camera);
+        needsRender = false;
+        rendered = true;
+      }
+      node("physics-status").textContent = `RECORDED PHYSICS / ${paused ? "PAUSED" : "PLAYING"}`;
+      node("physics-height").textContent = `${frame.rootHeightM.toFixed(3)} m`;
+      node("physics-error").textContent = `${frame.jointRmsRad.toFixed(4)} rad`;
+      node("physics-contacts").textContent = String(frame.contacts);
+      node("physics-time").textContent = `${time.toFixed(2)} s`;
+      node<HTMLInputElement>("physics-scrub").value = String(time);
+      requestAnimationFrame(animate);
+    } catch (error) { running = false; rendered = false; fail(error); }
+  }
+  requestAnimationFrame(animate);
+}
+
+declare global {
+  interface Window {
+    physicsReplay?: { snapshot: () => { ready: boolean; case: string; time: number; paused: boolean; kind: string; frameCount: number } };
+  }
+}
+start().catch(fail);

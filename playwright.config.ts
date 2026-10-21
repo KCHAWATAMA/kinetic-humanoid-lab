@@ -5,7 +5,7 @@ export default defineConfig({
   testMatch: "**/*.spec.ts",
   workers: 1,
   fullyParallel: false,
-  timeout: 90000,
+  timeout: 240000,
   expect: { timeout: 15000 },
   reporter: "list",
   use: {

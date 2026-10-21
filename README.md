@@ -1,10 +1,14 @@
 # Kinetic / Humanoid Lab
 
-A local, interactive 3D humanoid with analytic limb inverse kinematics, a procedural gait generator, reachable hand-target interaction, and live numerical diagnostics. Built with TypeScript, Three.js and Vite; all robot geometry is authored in code. No external models, API keys, paid services, or policy weights.
+A local, interactive 3D humanoid playground with analytic limb inverse kinematics, a procedural gait generator, reachable hand-target interaction, and live numerical diagnostics. Built with TypeScript, Three.js and Vite; the playground's robot geometry is authored in code. No API keys or paid services.
 
-**This is a kinematic baseline, not a learned physics controller or a state-of-the-art result.** Feet follow prescribed paths; the body does not simulate forces, contact dynamics, balance, or falls. Small IK residuals are implementation checks, not evidence of physical tracking performance.
+**The interactive playground is a kinematic baseline, not a learned physics controller or a state-of-the-art result.** Feet follow prescribed paths; its body does not simulate forces, contact dynamics, balance, or falls. Small IK residuals are implementation checks, not evidence of physical tracking performance.
+
+**A separate pretrained-physics checkpoint now runs actual G1 control in CPU MuJoCo.** Two 10-second synthetic-reference trials completed without detected falls. Its [recorded browser replay](physics.html) shows real simulation body transforms and tracking errors; it is not live browser inference. See [the reproduction guide and measured results](research/README.md). Model weights stay in an ignored local cache, not in the repository or web bundle.
 
 ![Kinetic desktop demo, captured by the software-rendered browser smoke test](docs/demo.png)
+
+![Recorded pretrained G1 physics, with simulated and reference skeletons](docs/physics-demo.png)
 
 ## Run locally
 
@@ -23,6 +27,8 @@ npm run preview
 ```
 
 Open **http://127.0.0.1:4173**. The server binds to loopback, not the public network. Stop it with Ctrl+C. After dependency installation the app makes no external asset, font, model, analytics, or API requests.
+
+The measured physics replay is at **http://127.0.0.1:4173/physics.html**. Viewing its committed data requires no Python installation. Reproducing the policy rollout requires the separate optional [Python 3.11 CPU environment](research/README.md).
 
 ## Explore
 
@@ -64,11 +70,11 @@ The numerical tests print their measured maxima and enforce these thresholds:
 | Gait boundary continuity | Stance/swing and cycle boundaries | Position difference < 0.0000001 m |
 | Pause, reset, replay | Identical input sequences | Exact deterministic state equality |
 
-Browser tests run serially to limit memory use. They use Chromium's software WebGL backend so the smoke test does not depend on a dedicated GPU. They exercise all motion modes, pause/reset, tempo, steering, target reach limits, direct target dragging, keyboard pause, overlay, export and mobile layout. Screenshots are written to `test-results/kinetic-desktop.png` and `test-results/kinetic-mobile.png`. The exported FPS is measured locally, not a promised hardware-independent rate.
+Browser tests run serially to limit memory use, with a bounded four-minute timeout per test for loaded machines. They use Chromium's software WebGL backend so the smoke test does not depend on a dedicated GPU. They exercise all motion modes, pause/reset, tempo, steering, target reach limits, direct target dragging, keyboard pause, overlay, export and mobile layout, plus physics replay selection, scrubbing, pause/reset, reference overlay, mobile layout and an explicit missing-data error. Screenshots are written to `test-results/kinetic-desktop.png`, `test-results/kinetic-mobile.png` and `test-results/kinetic-physics.png`. Both viewers redraw paused scenes only after interaction or a camera/viewport change. The exported FPS counts actual renders, so it can drop to zero while paused; it is not a promised hardware-independent rate.
 
 ### Recorded local run (21 October 2026)
 
-Node 24.22.1 on Windows: **6 numerical tests and 3 browser tests passed**, and the TypeScript / Vite production build passed. The browser suite took about 2.4 minutes with one worker and software rendering; trace recording is disabled to avoid memory-heavy screenshots during every action.
+Node 24.22.1 and Python 3.11.9 on Windows: **6 kinematics tests, 5 deployment/replay tests and 5 browser tests passed**, and the TypeScript / Vite production build passed. The final browser suite took about 3.2 minutes with one worker and software rendering; trace recording is disabled to avoid memory-heavy screenshots during every action. Earlier attempts timed out under host load; paused-scene redraw reduction and the bounded slow-host timeout allowed the complete suite to pass.
 
 | Measured diagnostic | Maximum |
 | --- | --- |
@@ -77,11 +83,11 @@ Node 24.22.1 on Windows: **6 numerical tests and 3 browser tests passed**, and t
 | Stance endpoint height error, 19,200 poses | 1.39e-16 m |
 | Straight-line stance slide per step, 7,200 steps | 2.07e-15 m |
 
-These near-machine-precision results are expected for an analytic geometric construction. They do **not** measure physical stability, contact forces, learned-motion quality, or benchmark success rate. The live scene reported 7,938 rendered triangles and 43 draw calls in one sampled pose. Software-rendered screenshot runs were substantially slower than the embedded browser, which sampled approximately 60 FPS; neither is a controlled performance benchmark. Vite emits a non-fatal bundle-size advisory for the approximately 525 kB minified application including Three.js (134 kB gzip).
+These near-machine-precision results are expected for an analytic geometric construction. They do **not** measure physical stability, contact forces, learned-motion quality, or benchmark success rate. The live scene reported 7,938 rendered triangles and 43 draw calls in one sampled pose. Software-rendered screenshot runs were substantially slower than the embedded browser, which sampled approximately 60 FPS; neither is a controlled performance benchmark. Vite emits a non-fatal bundle-size advisory for the shared Three.js chunk (505 kB minified / 126 kB gzip); the playground and replay entry scripts are about 20 and 10 kB respectively.
 
-## What this does not establish
+## Playground limitations
 
-- There is no physics engine, torque or PD controller, collision avoidance, self-collision test, terrain adaptation, learned motion prior, motion capture dataset, text-to-motion model, or real-robot transfer.
+- The interactive playground has no physics engine, torque or PD controller, collision avoidance, self-collision test, terrain adaptation, learned motion prior, motion capture dataset, text-to-motion model, or real-robot transfer. The separate research checkpoint uses real MuJoCo contacts and pretrained PD targets; its own limitations and metrics are documented separately.
 - Contact indicators represent the **scheduled kinematic stance**, not force sensors or simulated contacts.
 - Straight-line stance cancellation does not extend to turning; turning can produce visible foot sliding. Mode/tempo changes are immediate and not transition-blended. Swing trajectories are position-continuous but not velocity-matched at the stance boundary.
 - The displayed root travel is displacement from the origin, not accumulated path length. The floor and camera follow the root; the visible ring is a moving reference, not a fixed platform.
@@ -101,9 +107,13 @@ The following references contextualize the distance between this baseline and mo
 
 SuperMimic's [browser-demo license](https://supermimic.github.io/demo/LICENSE.html) is proprietary and permits personal browser evaluation only, with restrictions on redistribution, derivatives, automated access and evaluation of other systems using its outputs. **No code, weights, assets or outputs from that demo are included, downloaded or automated here.**
 
-### A concrete next research step
+### Verified optional CPU inference, not benchmark reproduction
 
-[NVIDIA ProtoMotions installation documentation](https://github.com/NVlabs/ProtoMotions/blob/main/docs/source/getting_started/installation.rst) and [pretrained-model documentation](https://github.com/NVlabs/ProtoMotions/blob/main/docs/source/getting_started/pretrained_models.rst) describe a CPU-only MuJoCo route (Python 3.10+, one environment) for the G1 deployment tracker. The `g1-bones-deploy` tracker and `g1_bones_seed_mini` motions could support actual physical tracking measurements on modest hardware. This is a **documented future path, not installed or tested here**.
+[NVIDIA ProtoMotions installation documentation](https://github.com/NVlabs/ProtoMotions/blob/main/docs/source/getting_started/installation.rst) and [pretrained-model documentation](https://github.com/NVlabs/ProtoMotions/blob/main/docs/source/getting_started/pretrained_models.rst) describe CPU-only MuJoCo deployment. This repository now verifies the **smaller standalone ONNX route**, pinned to source revision `f69fdcaabff31846b4d2247207417b57dc788828`, instead of installing the full training framework or loading pickle checkpoints.
+
+The 22.6 MB `g1-bones-deploy` export drove two self-authored references for 500 policy calls and 10,000 physics steps each. Stand / slow-arm-sweep joint RMSE was **0.151715 / 0.175384 radians**, mean body-origin error **3.981 / 3.753 cm**, with no detected falls or numerical warnings in either 10-second trial. Wall times were **58.05 / 40.08 seconds**: slower than real time on the loaded machine. This is a narrow deployment smoke test, not a training achievement or published benchmark comparison.
+
+The `g1_bones_seed_mini` dataset was **not downloaded or used** because the user's motion-data access terms were not established. No claims are made about the upstream motion corpus. Full provenance, fall definition, limitations, exact package pins and reproducible commands are in [research/README.md](research/README.md); measured frames and metrics are in [public/physics-replay.json](public/physics-replay.json).
 
 That tracker consumes reference motion, not text; its 29-action mapping, PD gains, observation history and joint ordering must match the deployment contract. The source is Apache-2.0; weights use the NVIDIA Open Model License, with separate robot and motion-data terms. SMPL MaskedMimic checkpoints are IsaacLab-only and should not be confused with this G1 deployment route. Before claiming progress toward published results, reproduce a named physical benchmark with a pinned model/data version, episode count, tracking errors, failure definition, runtime, and hardware.
 
@@ -113,8 +123,12 @@ That tracker consumes reference motion, not text; its 29-action mapping, PD gain
 src/kinematics.ts        Renderer-independent analytic IK and gait
 src/main.ts              Geometry, scene, interaction and diagnostics
 src/style.css            Responsive laboratory interface
+src/physics.ts           Viewer for recorded CPU policy/physics results
+research/                Optional pinned CPU inference runner and contract tests
+public/physics-replay.json Measured rollout output (no weights or motion dataset)
 tests/kinematics.test.ts Numerical invariants and motion checks
 tests/browser.spec.ts    Browser controls, reach interaction and screenshots
+tests/physics.spec.ts    Recorded replay controls and explicit missing-data error
 ```
 
 Three.js is MIT-licensed; no third-party humanoid assets are bundled. Dependency versions are locked in `package-lock.json`.

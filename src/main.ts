@@ -37,7 +37,7 @@ app.innerHTML = `
         <div class="axis-row"><label for="target-y">Y</label><input id="target-y" type="range" min="0.7" max="2.2" step="0.01" value="1.48" /><output id="target-y-value">1.48</output></div>
         <div class="axis-row"><label for="target-z">Z</label><input id="target-z" type="range" min="-0.6" max="0.9" step="0.01" value="0.35" /><output id="target-z-value">0.35</output></div>
       </section>
-      <div class="disclosure"><span class="small-dot"></span><p><strong>Kinematics, not physics.</strong> Analytic limb IK and prescribed foot paths. No learned policy, balance simulation, or SOTA claim.</p></div>
+      <div class="disclosure"><span class="small-dot"></span><p><strong>Kinematics, not physics.</strong> Analytic limb IK and prescribed foot paths. No learned policy, balance simulation, or SOTA claim.<br><a href="./physics.html" class="physics-link">Explore pretrained physics replay &#8599;</a></p></div>
     </aside>
     <section class="viewport" aria-label="Interactive 3D humanoid">
       <div id="scene"></div>
@@ -106,6 +106,12 @@ function start() {
   sceneHost.append(renderer.domElement);
   const camera = new THREE.PerspectiveCamera(36, 1, 0.05, 100);
   const controls = new OrbitControls(camera, renderer.domElement);
+  let needsRender = true;
+  const invalidate = () => { needsRender = true; };
+  controls.addEventListener("change", invalidate);
+  for (const event of ["input", "change", "click", "pointermove", "keydown"]) {
+    document.addEventListener(event, invalidate);
+  }
   controls.enableDamping = true;
   controls.enablePan = false;
   controls.minDistance = 2.6;
@@ -220,6 +226,7 @@ function start() {
     renderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    invalidate();
   };
   new ResizeObserver(resize).observe(sceneHost);
   resize();
@@ -403,10 +410,13 @@ function start() {
       errorGeometry.computeBoundingSphere();
       errorLine.visible = sim.reaching && pose.reachError > 0.001;
       controls.update();
-      renderer.render(scene, camera);
-      state.rendererReady = true;
-      state.frame++;
-      fpsFrames++;
+      if (!sim.paused || needsRender) {
+        renderer.render(scene, camera);
+        needsRender = false;
+        state.rendererReady = true;
+        state.frame++;
+        fpsFrames++;
+      }
       if (now - fpsStart >= 1000) {
         state.fps = fpsFrames * 1000 / (now - fpsStart);
         fpsFrames = 0;

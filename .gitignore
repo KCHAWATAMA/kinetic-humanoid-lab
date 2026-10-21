@@ -3,3 +3,6 @@ dist/
 test-results/
 playwright-report/
 *.local
+.research-cache/
+research/.venv/
+research/__pycache__/
