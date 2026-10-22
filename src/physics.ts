@@ -15,6 +15,11 @@ type Replay = {
   schemaVersion: number; kind: string; policy: string; reference: string; createdAt: string;
   bodyNames: string[]; parents: number[]; cases: Trial[];
   provenance: { revision: string };
+  locomotion?: {
+    passed: boolean; gates: Record<string, boolean>;
+    metrics: { verified_steps_per_foot: number[]; forward_progress_m: number; final_lateral_drift_m: number;
+      root_xy_rmse_m: number; mean_contact_slip_m_s: number[]; p95_contact_slip_m_s: number[] };
+  };
 };
 type ComparisonEpisode = {
   name: string; condition: string; controller: "onnx" | "direct_pd"; termination: string | null;
@@ -31,6 +36,8 @@ type ComparisonSummary = {
 type Comparison = { protocolSha256: string; episodes: ComparisonEpisode[]; summary: ComparisonSummary[] };
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+const mocapReplay = new URLSearchParams(location.search).get("replay") === "cmu";
+const replayUrl = mocapReplay ? "./mocap-v2/physics-replay.json" : "./physics-replay.json";
 function assertReplay(value: unknown): asserts value is Replay {
   if (!record(value) || value.schemaVersion !== 1 || value.kind !== "recorded-pretrained-policy-physics"
     || typeof value.policy !== "string" || typeof value.reference !== "string" || typeof value.createdAt !== "string"
@@ -53,6 +60,22 @@ function assertReplay(value: unknown): asserts value is Replay {
         || ![frame.body, frame.reference].every(points => Array.isArray(points) && points.length === 33
           && points.every(p => Array.isArray(p) && p.length === 3 && p.every(finite)))) throw new Error("Invalid sampled physics state");
       previousTime = frame.time;
+    }
+    if (mocapReplay) {
+      if (value.experimentId !== "g1-cmu-contact-v2.2" || !record(value.locomotion)
+        || typeof value.locomotion.passed !== "boolean" || !record(value.locomotion.gates)
+        || Object.keys(value.locomotion.gates).length !== 12
+        || !Object.values(value.locomotion.gates).every(g => typeof g === "boolean")
+        || value.locomotion.passed !== Object.values(value.locomotion.gates).every(g => g === true)
+        || !record(value.locomotion.metrics)) throw new Error("Incomplete measured mocap locomotion outcome");
+      const m = value.locomotion.metrics;
+      if (!["forward_progress_m", "final_lateral_drift_m", "root_xy_rmse_m"].every(key => finite(m[key]))
+        || !Array.isArray(m.verified_steps_per_foot) || m.verified_steps_per_foot.length !== 2
+        || !m.verified_steps_per_foot.every(v => Number.isInteger(v) && v >= 0)
+        || !["mean_contact_slip_m_s", "p95_contact_slip_m_s"].every(key => {
+          const pair = m[key];
+          return Array.isArray(pair) && pair.length === 2 && pair.every(v => finite(v) && v >= 0);
+        })) throw new Error("Invalid measured mocap locomotion metrics");
     }
   }
 }
@@ -103,7 +126,7 @@ app.innerHTML = `
   <main class="physics-layout">
     <section class="physics-stage" aria-label="Recorded G1 physics replay">
       <div id="physics-scene"></div>
-      <div class="physics-overlay"><div class="eyebrow">EXPERIMENT 002 / PRETRAINED INFERENCE</div><h1>From poses<br>to <em>physics.</em></h1><p>Recorded MuJoCo body transforms.<br>Actual pretrained actions. No browser inference.</p></div>
+      <div class="physics-overlay"><div class="eyebrow">${mocapReplay ? "EXPERIMENT 007 / CMU PHYSICAL TRACKING" : "EXPERIMENT 002 / PRETRAINED INFERENCE"}</div><h1>${mocapReplay ? "Physical steps.<br><em>Tracking drift.</em>" : "From poses<br>to <em>physics.</em>"}</h1><p>Recorded MuJoCo body transforms.<br>Actual pretrained actions. No browser inference.</p></div>
       <span id="physics-status" class="physics-status">LOADING VERIFIED ROLLOUT</span>
       <div class="physics-legend"><span>TEAL / SIMULATED G1</span><span>AMBER / REFERENCE</span></div>
     </section>
@@ -111,14 +134,18 @@ app.innerHTML = `
       <div class="eyebrow">CPU POLICY CHECK</div><h2>Pretrained, not pretended.</h2>
       <p id="policy-name"></p>
       <p class="physics-note">A 29-action NVIDIA tracker drove a floating-base G1 in CPU MuJoCo. This player shows the saved result, including tracking errors and any falls.</p>
-      <label for="physics-case">Self-authored reference</label><select id="physics-case" disabled></select>
+      <label for="physics-case">${mocapReplay ? "CMU motion reference" : "Self-authored reference"}</label><select id="physics-case" disabled></select>
       <label class="ghost-label"><input id="physics-ghost" type="checkbox" checked /> Show reference skeleton</label>
       <div class="physics-summary"><span id="completion">--</span><span id="fall-result">--</span></div>
       <div class="metric"><span>TRIAL JOINT RMSE</span><div><output id="trial-error">--</output><small>rad</small></div><p>Across all 29 joints and control samples</p></div>
       <div class="metric"><span>MEAN CPU INFERENCE</span><div><output id="inference-time">--</output><small>ms</small></div><p>One ONNX Runtime thread</p></div>
       <div class="physics-live"><span>FRAME ROOT HEIGHT <output id="physics-height">--</output></span><span>FRAME JOINT RMS <output id="physics-error">--</output></span><span>CONTACT CONSTRAINTS <output id="physics-contacts">--</output></span></div>
-      <p class="physics-note">Two synthetic references are smoke tests, <strong>not a published benchmark or proof of generalization</strong>. No BONES motion files, unsafe pickle loads, training, or real robot were used.</p>
-      <a href="./physics-replay.json" download class="replay-download">Download measured rollout JSON &#8599;</a>
+      <div id="mocap-physical-outcome" class="physics-note" hidden></div>
+      <p class="physics-note">${mocapReplay
+        ? "Original-timing CMU 07/04 tracking, initialized once from a moving reference pose and velocity. Not a start-from-rest controller. All later motion is actual free-base physics. Four verified steps do not erase the failed world-space tracking gates."
+        : "Two synthetic references are smoke tests, <strong>not a published benchmark or proof of generalization</strong>. No BONES motion files, unsafe pickle loads, training, or real robot were used."}</p>
+      <a href="${replayUrl}" download class="replay-download">Download measured rollout JSON &#8599;</a>
+      <a href="${mocapReplay ? "./physics.html" : "./physics.html?replay=cmu"}" class="replay-download">${mocapReplay ? "Original ten-second standing / arm replay" : "Watch actual CMU physical stepping (tracking gates failed)"} &#8599;</a>
       <p id="physics-provenance" class="physics-provenance"></p>
     </aside>
     <footer class="physics-transport"><button id="physics-pause" disabled>Pause replay</button><button id="physics-reset" disabled>Restart</button><label for="physics-scrub">Recorded time</label><input id="physics-scrub" type="range" min="0" max="10" step="0.04" value="0" disabled /><output id="physics-time">0.00 s</output></footer>
@@ -195,7 +222,7 @@ async function loadComparison() {
 }
 
 async function start() {
-  const response = await fetch("./physics-replay.json");
+  const response = await fetch(replayUrl);
   if (!response.ok) throw new Error(`Rollout request failed (${response.status})`);
   const payload: unknown = await response.json();
   assertReplay(payload);
@@ -258,7 +285,8 @@ async function start() {
   for (const item of replay.cases) {
     const option = document.createElement("option");
     option.value = item.name;
-    option.textContent = item.name === "stand" ? "Grounded nominal stand" : "Slow symmetric arm sweep";
+    option.textContent = item.name === "stand" ? "Grounded nominal stand"
+      : item.name === "arm_sweep" ? "Slow symmetric arm sweep" : "CMU 07/04: physical stepping, tracking failed";
     select.append(option);
   }
   function setSummary() {
@@ -271,6 +299,25 @@ async function start() {
   }
   select.addEventListener("change", () => { trial = replay.cases.find(item => item.name === select.value)!; time = 0; setSummary(); });
   node("policy-name").textContent = replay.policy;
+  if (replay.locomotion) {
+    const outcome = node("mocap-physical-outcome"), m = replay.locomotion.metrics;
+    outcome.hidden = false;
+    const title = document.createElement("strong");
+    title.id = "mocap-physical-verdict";
+    title.textContent = replay.locomotion.passed ? "ALL LOCAL LOCOMOTION GATES PASSED" : "REAL STEPS RECORDED / TRAJECTORY GATES FAILED";
+    outcome.append(title);
+    for (const text of [
+      `Verified steps left / right: ${m.verified_steps_per_foot.join(" / ")}.`,
+      `Forward progress: ${m.forward_progress_m.toFixed(3)} m. Lateral drift: ${m.final_lateral_drift_m.toFixed(3)} m.`,
+      `Root XY RMSE: ${m.root_xy_rmse_m.toFixed(3)} m (limit 0.150 m).`,
+      `Mean foot slip: ${m.mean_contact_slip_m_s.map(v => (v * 1000).toFixed(2)).join(" / ")} mm/s.`,
+      `Failed gates: ${Object.entries(replay.locomotion.gates).filter(([, passed]) => !passed).map(([name]) => name.replaceAll("_", " ")).join(", ") || "none"}.`,
+    ]) {
+      const p = document.createElement("p");
+      p.textContent = text;
+      outcome.append(p);
+    }
+  }
   node("physics-provenance").textContent = `Source ${replay.provenance.revision.slice(0, 12)} / recorded ${replay.createdAt.slice(0, 10)}. Model: NVIDIA Open Model License. Robot: Unitree BSD-3-Clause.`;
   node<HTMLInputElement>("physics-ghost").addEventListener("change", event => { ghost.visible = (event.target as HTMLInputElement).checked; });
   function setPaused(value: boolean) {
@@ -301,6 +348,7 @@ async function start() {
     fail(new Error("WebGL context lost; reload to restart"));
   });
   window.physicsReplay = { snapshot: () => ({ ready: rendered, case: trial.name, time, paused, kind: replay.kind, frameCount: trial.frames.length }) };
+  const previousFollow = new THREE.Vector3(0, .7, 0);
   function animate(now: number) {
     if (!running) return;
     try {
@@ -310,6 +358,14 @@ async function start() {
       if (!paused) time = (time + Math.min(elapsed, 0.1)) % duration;
       const index = Math.min(trial.frames.length - 1, Math.floor(time / duration * (trial.frames.length - 1)));
       const frame = trial.frames[index];
+      if (mocapReplay) {
+        const follow = new THREE.Vector3((frame.body[0][0] + frame.reference[0][0]) / 2, .7,
+          -(frame.body[0][1] + frame.reference[0][1]) / 2);
+        const delta = follow.clone().sub(previousFollow);
+        camera.position.add(delta);
+        controls.target.add(delta);
+        previousFollow.copy(follow);
+      }
       let offset = 0;
       frame.body.forEach((p, i) => {
         const current = point(p);

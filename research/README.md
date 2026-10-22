@@ -2,7 +2,9 @@
 
 This backend runs NVIDIA's pretrained G1 deployment tracker through ONNX Runtime and steps a floating-base Unitree G1 in MuJoCo. It is separate from the procedural browser baseline. The browser physics page replays **recorded simulation transforms**; it does not run the policy live.
 
-**Latest checkpoint: [CMU 07/04 reference rejection](CMU-RETARGET.md).** The selected permissively usable human slow-walk clip was safely parsed, morphology-scaled and subjected to fixed exact-G1 reference gates. Contact inference, reach, IK, tendon and velocity checks failed, so no CMU policy rollout was allowed. Raw motion stays in ignored cache; the saved result and browser panel are reference diagnostics, not physical walking. Both the completed preflight and an initial reporting-error recovery are retained.
+**Latest checkpoint: [CMU retarget repair and actual physical steps](CMU-PHYSICS.md).** A finite-difference-verified constrained solver, grounded heel/toe rocking and temporal joint bounds repair the local reference defects. One real 3.72-second trial records two verified steps per foot, +2.499748 m progress and no fall/warnings. Lateral drift (-0.777209 m), root XY RMSE and body tracking still fail the unchanged physical criteria. Recorded playback is selected with `/physics.html?replay=cmu`; it is not reference animation, live inference or a start-from-rest controller.
+
+**Preserved v1: [CMU 07/04 reference rejection](CMU-RETARGET.md).** The first candidate failed contact inference, reach, IK, tendon and velocity checks before physics. Both the completed preflight and its initial reporting-error recovery remain immutable, alongside every later solver version. Raw motion stays in ignored cache.
 
 **Previous checkpoint: [failed-walking contract diagnosis](CONTRACT-AUDIT.md).** Independent source semantics match actual ONNX intermediate observations and physical action scaling. Reference probes change policy output; both unchanged walking trajectories reproduce exactly, with no torque saturation but insufficient support transfer. No runtime contract fix or walking success is claimed. The report includes complete requested/commanded/realized leg evidence, the documentation's tanh discrepancy, and the licensed-reference access boundary.
 
@@ -16,13 +18,15 @@ Use Python 3.11 (the machine's unqualified `python` may select a newer incompati
 py -3.11 -m venv research\.venv
 & research\.venv\Scripts\python.exe -m pip install --no-compile --only-binary=:all: -r research\requirements.txt
 & research\.venv\Scripts\python.exe research\fetch_assets.py
-& research\.venv\Scripts\python.exe -m unittest discover -s research -p "test_*.py" -v
-& research\.venv\Scripts\python.exe research\rollout.py --seconds 10
+& research\.venv\Scripts\python.exe -m unittest discover -s research -p "test_rollout.py" -v
+& research\.venv\Scripts\python.exe research\rollout.py --seconds 10 --output .research-cache\stand-arm-reproduction.json
 npm run build
 npm run preview
 ```
 
 Open `http://127.0.0.1:4173/physics.html`, also linked from the kinematic playground. The committed JSON replay can be viewed without installing Python or downloading weights; Python is needed only to reproduce inference. Asset setup requires internet access; inference and playback do not. A missing replay is an explicit error, not an invented demonstration. If venv creation was interrupted before pip was installed, run `research\.venv\Scripts\python.exe -m ensurepip --upgrade --default-pip` before installing requirements.
+
+For the complete research test suite, also install the optional pinned tools with `research\.venv\Scripts\python.exe -m pip install --no-compile --only-binary=:all: -r research\diagnostics-requirements.txt -r research\retarget-requirements.txt`, fetch the two selected CMU assets with `research\.venv\Scripts\python.exe research\cmu.py --fetch`, then run `research\.venv\Scripts\python.exe -m unittest discover -s research -p "test_*.py" -v`. See [CMU-PHYSICS.md](CMU-PHYSICS.md#reproduce-and-inspect) for bounded mocap reproduction. The optional retarget tool adds only SciPy 1.16.3; the original standing runner does not need it.
 
 The original setup attempt was interrupted by host execution stalls and left partially installed wheels. After the host recovered, `pip install --no-compile --force-reinstall --only-binary=:all: -r research\requirements.txt` repaired the isolated environment and `pip check` passed. No system Python changes or host-safeguard changes were needed.
 
@@ -38,14 +42,14 @@ Pinned official source: [NVlabs/ProtoMotions at f69fdcaabff31846b4d2247207417b57
 | G1 MJCF | Unitree Robotics BSD-3-Clause; attribution/license retained beside the cached description |
 | Deployment protocol reference | NVIDIA ProtoMotions Apache-2.0; source license and third-party notice retained in cache |
 | Physical-rollout references | Self-authored grounded nominal stand, slow symmetric shoulder/elbow sweep and bounded synthetic walking; no BONES motion data downloaded |
-| Separate CMU reference preflight | Only subject 07 skeleton and trial 04 motion; CMU stated terms, not CC-BY. Raw files stay ignored; derived reference rejected before physics. [Terms and attribution](CMU-RETARGET.md#source-terms-and-exact-files) |
-| Replay | Our numerical simulation output, not upstream weights or motion data |
+| CMU reference and physical tracking | Only subject 07 skeleton and trial 04 motion; CMU stated terms, not CC-BY. Raw files stay ignored; v1 was rejected and repaired v2.2 drove one physical trial. [Terms and attribution](CMU-RETARGET.md#source-terms-and-exact-files) |
+| Replay | Measured simulation and clearly identified derived reference poses; no weights or raw ASF/AMC files |
 
 Model SHA-256: `a59baa3e04a951e5cf0b4cc68f24ebaafa9272714226618b99a5017dfc805b4c` (22,606,590 bytes).
 
 Applicable source and robot notices are retained in [licenses/](licenses/). Cached model artifacts retain their own NVIDIA license PDF, notice and model card; weights are not committed or served by the browser.
 
-`fetch_assets.py` retrieves a fixed allowlist from the pinned official revision, bounds payload sizes, checks the model against its official Git LFS SHA-256 and records every file digest. The runner verifies these digests before loading. It reads only ONNX, safe YAML, XML and JSON: no `.pt`, `.ckpt`, pickle, PyTorch, upstream Python execution, or custom ONNX plugins. ONNX Runtime telemetry is disabled. Nothing is uploaded.
+`fetch_assets.py` retrieves a fixed allowlist from the pinned official revision, bounds payload sizes, checks the model against its official Git LFS SHA-256 and records every file digest. The runner verifies these digests before loading. It reads only ONNX, safe YAML, XML and JSON: no `.pt`, `.ckpt`, pickle, PyTorch, upstream Python execution, or custom ONNX plugins. ONNX Runtime telemetry is disabled. Inference makes no external requests; cached weights and raw data are not uploaded.
 
 The full BONES-SEED reference-motion access/license contract was not established for this user. The subsequent audit verified [custom eligibility-restricted terms](https://bones.studio/info/seed-license) and gated access; no terms were accepted or eligibility asserted. The public presence of a retargeted file is not treated as permission. The optional route therefore **does not reproduce the upstream BONES benchmark**. The small ONNX export avoids the 238 MB training checkpoint and full GPU-oriented framework.
 
@@ -61,7 +65,7 @@ The implementation follows the pinned official [standalone MuJoCo runner](https:
 - The runner retains primitive collisions, inertias, tendons, joint constraints and free-base dynamics. Only zero-density, non-colliding visual mesh geoms and sensors are removed; no STL files are needed. The replay deliberately renders body-coordinate skeletons, not a mesh-accurate G1.
 - Passive damping/stiffness/friction loss are zeroed as in the official deployment runner. Armatures and per-joint effort limits come from the frozen safe-YAML config. Unlike the reference runner's stated force-limit TODO, **both the original joint limits and explicit actuator effort limits are retained/enforced** here.
 - MuJoCo's default Euler integrator is retained, matching the unmodified MJCF/standalone path, with gravity -9.81 m/s squared.
-- The robot starts at the configured nominal joint pose, with foot collision capsules 2 mm above ground and zero velocity. References use that same world frame, so the initial alignment is identity. This runner does not claim support for arbitrary spatially offset reference clips.
+- The original stand/arm/comparison/synthetic-walk paths still start at the configured nominal joint pose, with foot collision capsules 2 mm above ground and zero velocity. The new optional `initial_state` accepts a validated pose/velocity only when it agrees with the custom reference's joints, velocities, full body positions and torso anchor, and satisfies joint/tendon bounds. CMU uses this explicit moving initialization once; no simulated state is reset from the reference afterward.
 
 ## Measurements and interpretation
 

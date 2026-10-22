@@ -4,15 +4,17 @@ A local, interactive 3D humanoid playground with analytic limb inverse kinematic
 
 **The interactive playground is a kinematic baseline, not a learned physics controller or a state-of-the-art result.** Feet follow prescribed paths; its body does not simulate forces, contact dynamics, balance, or falls. Small IK residuals are implementation checks, not evidence of physical tracking performance.
 
+**Latest measured result: actual physical stepping, but incomplete trajectory tracking.** A repaired CMU 07/04 reference drove the pretrained G1 through **two verified steps per foot and 2.50 m forward travel in 3.72 seconds**, without a fall or numerical warning. It still drifted **0.78 m sideways** and failed three unchanged tracking gates. [Watch the recorded physical trial](physics.html?replay=cmu) or read [the solver repair, complete ledger and measured results](research/CMU-PHYSICS.md). This is moving-reference tracking, not a start-from-rest controller or a SOTA result.
+
 **A separate pretrained-physics checkpoint now runs actual G1 control in CPU MuJoCo.** Two 10-second synthetic-reference trials completed without detected falls. Its [recorded browser replay](physics.html) shows real simulation body transforms and tracking errors; it is not live browser inference. See [the reproduction guide and measured results](research/README.md). Model weights stay in an ignored local cache, not in the repository or web bundle.
 
 **A fixed matched comparison now includes the failures too.** Across six five-second cases per controller (two references, nominal and two seeded push conditions), pretrained ONNX had 0/6 falls and direct PD had 6/6. Direct PD nevertheless had **lower joint RMSE and shorter wall time**. The physics page includes every episode, pooled errors and full protocol provenance; this is a small synthetic comparison, not a published benchmark.
 
-**Physical walking has not been achieved.** Two bounded eight-second, self-authored slow-walk experiments completed without falls, but neither foot took a verified step and the roots moved slightly backward. Both failed the progress and world-space tracking criteria. Their complete configurations, contact/slip telemetry, failed gates and frames are retained—not presented as successful walking.
+**The earlier synthetic walking experiments failed.** Two bounded eight-second, self-authored slow-walk experiments completed without falls, but neither foot took a verified step and the roots moved slightly backward. Both failed the progress and world-space tracking criteria. Their complete configurations, contact/slip telemetry, failed gates and frames are retained—not presented as successful walking.
 
-**The subsequent [contract diagnosis](research/CONTRACT-AUDIT.md) found no deployment mismatch in the inspected fields.** Controlled target changes reach the actual ONNX graph and alter its commands, but support transfer remains insufficient; no actuator torque limits were reached. Instrumented runs reproduced both historical root trajectories and checked metrics exactly. A known-compatible locomotion reference remains the missing positive control, with motion-data licensing treated separately from model licensing.
+**The subsequent [contract diagnosis](research/CONTRACT-AUDIT.md) found no deployment mismatch in the inspected fields.** Controlled target changes reached the actual ONNX graph and altered its commands, but support transfer in those synthetic attempts remained insufficient; no actuator torque limits were reached. Instrumented runs reproduced both historical root trajectories and checked metrics exactly. Motion-data licensing is treated separately from model licensing.
 
-**A licensed CMU slow-walk reference was attempted, but rejected before physics.** Subject 07/trial 04 was safely parsed and retargeted without changing its timing. The fixed candidate failed contact inference, reach, IK, tendon and velocity gates; no CMU policy trial ran. [Exact source terms, hashes, failure evidence and reproduction](research/CMU-RETARGET.md) distinguish this reference-generation blocker from the earlier physical failures. The physics page includes a separate rejection panel, not a fake walking replay.
+**The first CMU retarget was rejected before physics; its evidence remains immutable.** That v1 candidate failed contact inference, reach, IK, tendon and velocity gates. [Exact source terms, hashes and v1 failure evidence](research/CMU-RETARGET.md) remain separate from the repaired v2.2 physical trial above. No reference animation is presented as simulated locomotion.
 
 ![Kinetic desktop demo, captured by the software-rendered browser smoke test](docs/demo.png)
 
@@ -37,6 +39,8 @@ npm run preview
 Open **http://127.0.0.1:4173**. The server binds to loopback, not the public network. Stop it with Ctrl+C. After dependency installation the app makes no external asset, font, model, analytics, or API requests.
 
 The measured physics replay is at **http://127.0.0.1:4173/physics.html**. Viewing its committed data requires no Python installation. Reproducing the policy rollout requires the separate optional [Python 3.11 CPU environment](research/README.md).
+
+The new actual-stepping trial is at **http://127.0.0.1:4173/physics.html?replay=cmu**. It shows four verified physical steps and the failed trajectory-tracking verdict, with actual/reference skeletons, pause/reset and scrubbing.
 
 The same page's comparison section reads `public/physics-comparison.json`, separate from the unchanged ten-second replay. Reproduce its fixed twelve-episode matrix with `research\.venv\Scripts\python.exe research\evaluate.py` after following the Python setup guide.
 
@@ -180,9 +184,13 @@ public/locomotion/       Both failed attempts, complete telemetry and derived su
 research/cmu.py          Pinned numeric-only reader for CMU 07/04 ASF/AMC
 research/retarget_cmu.py Bounded CMU-to-G1 reference preflight and rejection gates
 public/mocap/            Rejected candidate, provenance and full execution ledger
+research/constrained_ik.py Finite-difference-verified constrained G1 pose solver
+research/cmu_contact.py  Grounded CMU retarget repair and actual physics trial
+public/mocap-v2/         All repair versions, measured stepping and failed tracking
 tests/kinematics.test.ts Numerical invariants and motion checks
 tests/browser.spec.ts    Browser controls, reach interaction and screenshots
 tests/physics.spec.ts    Recorded replay controls and explicit missing-data error
+tests/mocap-physics.spec.ts Real stepping replay, failed gates and missing-data error
 ```
 
 Three.js is MIT-licensed; no third-party humanoid assets are bundled. Dependency versions are locked in `package-lock.json`.

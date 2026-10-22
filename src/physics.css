@@ -9,7 +9,7 @@
 .physics-status { position: absolute; left: 35px; bottom: 32px; color: #a1f1cd; font: 9px Consolas, monospace; }
 .physics-legend { position: absolute; right: 30px; bottom: 32px; display: flex; gap: 15px; font: 8px Consolas, monospace; color: #a1f1cd; }
 .physics-legend span:last-child { color: #ffbd69; }
-.physics-details { border-left: 1px solid #23313a; padding: 30px 26px; background: #0b1218; }
+.physics-details { border-left: 1px solid #23313a; padding: 30px 26px; background: #0b1218; min-height: 0; overflow-y: auto; }
 .physics-details h2 { font-size: 23px; font-weight: 400; line-height: 1.2; }
 #policy-name { font-size: 11px; color: #a1f1cd; line-height: 1.6; }
 .physics-note { font-size: 10px; line-height: 1.75; color: #92a7b0; }

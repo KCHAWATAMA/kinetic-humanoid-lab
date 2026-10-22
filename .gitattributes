@@ -1,0 +1,6 @@
+# Recorded source and historical evidence hashes used Windows checkout bytes.
+research/*.py text eol=crlf
+research/*.json text eol=crlf
+public/**/*.json text eol=crlf
+# Preserve new immutable measured artifacts exactly, including in Git blobs.
+public/mocap-v2/*.json -text whitespace=trailing-space,space-before-tab,cr-at-eol

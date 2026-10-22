@@ -43,7 +43,7 @@ function assertSummary(value: unknown): asserts value is Summary {
 }
 
 export async function loadLocomotion(host: HTMLElement) {
-  host.innerHTML = `<div class="eyebrow">EXPERIMENT 004 / BOUNDED PHYSICAL LOCOMOTION</div>
+  host.innerHTML = `<div class="eyebrow">HISTORICAL EXPERIMENT 004 / SYNTHETIC PHYSICAL LOCOMOTION</div>
     <h2 id="locomotion-heading">A walk reference is not a walking robot.</h2>
     <p class="comparison-description">Two recorded eight-second experiments, not a live walking controller. Each used joint-limited G1 leg IK, four alternating foot placements and a +35 cm reference root target. Physical root motion was never assigned from that reference.</p>
     <p id="locomotion-status" role="status">Loading locomotion evidence...</p>
@@ -89,7 +89,7 @@ export async function loadLocomotion(host: HTMLElement) {
     }
     host.querySelector("#locomotion-interpretation")!.textContent = summary.walkingAchieved
       ? "At least one recorded attempt met the fixed local gates. This is not a published benchmark or SOTA result."
-      : "These recorded attempts did not establish physical walking. Low slip, no fall and a successful reference-IK calculation are not enough; all physical progress and step criteria must pass. The original ten-second standing/arm replay above is separate and must not be mistaken for a walking result.";
+      : "These recorded synthetic attempts did not establish physical walking. Low slip, no fall and a successful reference-IK calculation are not enough; all physical progress and step criteria must pass. The original ten-second standing/arm replay is available separately and must not be mistaken for a walking result.";
     for (const attempt of summary.attempts) {
       const link = document.createElement("a");
       link.className = "replay-download comparison-download";

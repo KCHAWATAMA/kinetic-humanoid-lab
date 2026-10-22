@@ -32,9 +32,10 @@ function assertEvidence(value: unknown): asserts value is Evidence {
 }
 
 export async function loadMocap(host: HTMLElement) {
-  host.innerHTML = `<div class="eyebrow">EXPERIMENT 006 / CMU REFERENCE PREFLIGHT</div>
-    <h2 id="mocap-heading">Human motion is not yet a compatible robot reference.</h2>
-    <p class="comparison-description">CMU subject 07, trial 04: one 3.72-second slow-walk segment, original timing, no speed sweep. The bounded G1 retarget failed before policy execution. This panel shows reference-generation diagnostics, not recorded physics or a walking replay.</p>
+  host.innerHTML = `<div class="eyebrow">HISTORICAL V1 / CMU REFERENCE PREFLIGHT</div>
+    <h2 id="mocap-heading">The first CMU retarget failed before physics.</h2>
+    <p class="comparison-description">CMU subject 07, trial 04: one 3.72-second slow-walk segment, original timing, no speed sweep. The first G1 retarget failed before policy execution. These preserved v1 diagnostics are not the repaired v2.2 physical trial.</p>
+    <a class="replay-download comparison-download" href="./physics.html?replay=cmu">Watch the repaired reference drive actual physical steps; trajectory gates still fail</a>
     <p id="mocap-status" role="status">Loading mocap preflight evidence...</p>
     <div id="mocap-error" role="alert" hidden></div>
     <div class="comparison-table-scroll" tabindex="0" aria-label="CMU reference rejection measurements">

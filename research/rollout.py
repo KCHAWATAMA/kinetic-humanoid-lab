@@ -217,7 +217,8 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: 
              record_frames: bool = True, wall_limit_seconds: float | None = None,
              reference_frames: list[dict] | None = None,
              observe: Callable[[mujoco.MjModel, mujoco.MjData, int, dict], None] | None = None,
-             observe_substep: Callable[[mujoco.MjModel, mujoco.MjData], None] | None = None) -> dict:
+             observe_substep: Callable[[mujoco.MjModel, mujoco.MjData], None] | None = None,
+             initial_state: tuple[np.ndarray, np.ndarray] | None = None) -> dict:
     if controller not in ("onnx", "direct_pd") or (controller == "onnx" and session is None):
         raise ValueError("Invalid controller or missing policy.")
     if not math.isfinite(seconds) or not 1 <= seconds <= 30:
@@ -253,14 +254,35 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: 
                 value = np.asarray(frame[key])
                 if value.shape != shape or not np.isfinite(value).all():
                     raise ValueError(f"Invalid reference {key}.")
-        if not np.allclose(reference_frames[0]["q"], default, atol=1e-6) or not np.allclose(reference_frames[0]["body"][0], [0, 0, height], atol=1e-6):
+        if initial_state is None and (not np.allclose(reference_frames[0]["q"], default, atol=1e-6)
+                                      or not np.allclose(reference_frames[0]["body"][0], [0, 0, height], atol=1e-6)):
             raise ValueError("Reference must start at the unchanged nominal initial state.")
         references = reference_frames
     data = mujoco.MjData(model)
     data.qpos[:3] = [0, 0, height]
     data.qpos[3:7] = [1, 0, 0, 0]
     data.qpos[7:] = default
+    if initial_state is not None:
+        if reference_frames is None:
+            raise ValueError("Explicit initial state requires matching custom reference frames.")
+        position, velocity = (np.asarray(value) for value in initial_state)
+        if (position.shape != (model.nq,) or velocity.shape != (model.nv,)
+            or not np.isfinite(position).all() or not np.isfinite(velocity).all()
+            or abs(np.linalg.norm(position[3:7]) - 1) > 1e-6 or position[2] < FALL_HEIGHT_M
+            or np.any(position[7:] < model.jnt_range[1:, 0]) or np.any(position[7:] > model.jnt_range[1:, 1])):
+            raise ValueError("Invalid explicit initial pose/velocity.")
+        data.qpos[:], data.qvel[:] = position, velocity
     mujoco.mj_forward(model, data)
+    if initial_state is not None:
+        first = references[0]
+        if (not np.allclose(data.qpos[7:], first["q"], atol=1e-6)
+            or not np.allclose(data.qvel[6:], first["v"], atol=1e-6)
+            or not np.allclose(data.xpos[1:], first["body"], atol=1e-6)
+            or not np.allclose(xyzw(data.xquat[anchor]), first["anchor"], atol=1e-6)
+            or np.any(data.ten_length < model.tendon_range[:, 0] - 1e-6)
+            or np.any(data.ten_length > model.tendon_range[:, 1] + 1e-6)):
+            raise ValueError("Explicit initial state disagrees with reference or ankle constraints.")
+        height = float(data.qpos[2])
     previous_targets = np.zeros(29, dtype=np.float32)
     frames, errors, body_errors, inference_ms, control_ms = [], [], [], [], []
     heights, tilts, contacts, target_changes = [], [], [], []
