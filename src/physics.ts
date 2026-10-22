@@ -10,16 +10,20 @@ type Frame = {
   time: number; body: Point[]; reference: Point[]; jointRmsRad: number;
   rootHeightM: number; contacts: number; fallen: boolean;
 };
-type Trial = { name: string; metrics: Record<string, number | boolean | null>; frames: Frame[] };
+type LocomotionOutcome = {
+  passed: boolean; gates: Record<string, boolean>;
+  metrics: { verified_steps_per_foot: number[]; forward_progress_m: number; final_lateral_drift_m: number;
+    root_xy_rmse_m: number; mean_contact_slip_m_s: number[]; p95_contact_slip_m_s: number[] };
+};
+type Trial = {
+  name: string; metrics: Record<string, number | boolean | null>; frames: Frame[];
+  locomotion?: LocomotionOutcome; pathMetrics?: Record<string, number>;
+};
 type Replay = {
   schemaVersion: number; kind: string; policy: string; reference: string; createdAt: string;
   bodyNames: string[]; parents: number[]; cases: Trial[];
   provenance: { revision: string };
-  locomotion?: {
-    passed: boolean; gates: Record<string, boolean>;
-    metrics: { verified_steps_per_foot: number[]; forward_progress_m: number; final_lateral_drift_m: number;
-      root_xy_rmse_m: number; mean_contact_slip_m_s: number[]; p95_contact_slip_m_s: number[] };
-  };
+  locomotion?: LocomotionOutcome;
 };
 type ComparisonEpisode = {
   name: string; condition: string; controller: "onnx" | "direct_pd"; termination: string | null;
@@ -37,7 +41,24 @@ type Comparison = { protocolSha256: string; episodes: ComparisonEpisode[]; summa
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 const mocapReplay = new URLSearchParams(location.search).get("replay") === "cmu";
-const replayUrl = mocapReplay ? "./mocap-v2/physics-replay.json" : "./physics-replay.json";
+const pathReplay = new URLSearchParams(location.search).get("replay") === "path";
+const locomotionReplay = mocapReplay || pathReplay;
+const replayUrl = pathReplay ? "./path-tracking-v1/physics-replay.json"
+  : mocapReplay ? "./mocap-v2/physics-replay.json" : "./physics-replay.json";
+function assertLocomotion(value: unknown): asserts value is LocomotionOutcome {
+  if (!record(value) || typeof value.passed !== "boolean" || !record(value.gates)
+    || Object.keys(value.gates).length !== 12 || !Object.values(value.gates).every(g => typeof g === "boolean")
+    || value.passed !== Object.values(value.gates).every(g => g === true)
+    || !record(value.metrics)) throw new Error("Incomplete measured mocap locomotion outcome");
+  const m = value.metrics;
+  if (!["forward_progress_m", "final_lateral_drift_m", "root_xy_rmse_m"].every(key => finite(m[key]))
+    || !Array.isArray(m.verified_steps_per_foot) || m.verified_steps_per_foot.length !== 2
+    || !m.verified_steps_per_foot.every(v => Number.isInteger(v) && v >= 0)
+    || !["mean_contact_slip_m_s", "p95_contact_slip_m_s"].every(key => {
+      const pair = m[key];
+      return Array.isArray(pair) && pair.length === 2 && pair.every(v => finite(v) && v >= 0);
+    })) throw new Error("Invalid measured mocap locomotion metrics");
+}
 function assertReplay(value: unknown): asserts value is Replay {
   if (!record(value) || value.schemaVersion !== 1 || value.kind !== "recorded-pretrained-policy-physics"
     || typeof value.policy !== "string" || typeof value.reference !== "string" || typeof value.createdAt !== "string"
@@ -62,21 +83,23 @@ function assertReplay(value: unknown): asserts value is Replay {
       previousTime = frame.time;
     }
     if (mocapReplay) {
-      if (value.experimentId !== "g1-cmu-contact-v2.2" || !record(value.locomotion)
-        || typeof value.locomotion.passed !== "boolean" || !record(value.locomotion.gates)
-        || Object.keys(value.locomotion.gates).length !== 12
-        || !Object.values(value.locomotion.gates).every(g => typeof g === "boolean")
-        || value.locomotion.passed !== Object.values(value.locomotion.gates).every(g => g === true)
-        || !record(value.locomotion.metrics)) throw new Error("Incomplete measured mocap locomotion outcome");
-      const m = value.locomotion.metrics;
-      if (!["forward_progress_m", "final_lateral_drift_m", "root_xy_rmse_m"].every(key => finite(m[key]))
-        || !Array.isArray(m.verified_steps_per_foot) || m.verified_steps_per_foot.length !== 2
-        || !m.verified_steps_per_foot.every(v => Number.isInteger(v) && v >= 0)
-        || !["mean_contact_slip_m_s", "p95_contact_slip_m_s"].every(key => {
-          const pair = m[key];
-          return Array.isArray(pair) && pair.length === 2 && pair.every(v => finite(v) && v >= 0);
-        })) throw new Error("Invalid measured mocap locomotion metrics");
+      if (value.experimentId !== "g1-cmu-contact-v2.2") throw new Error("Unexpected mocap experiment");
+      assertLocomotion(value.locomotion);
     }
+    if (pathReplay) {
+      assertLocomotion(trial.locomotion);
+      const path = trial.pathMetrics;
+      if (!record(path)
+        || !["final_cross_track_error_m", "final_along_track_error_m", "cross_track_rmse_m"]
+          .every(key => finite(path[key]))
+        || !["mean_body_position_error_m", "wall_seconds"].every(key => finite(metrics[key]))) {
+        throw new Error("Incomplete measured path comparison");
+      }
+    }
+  }
+  if (pathReplay && (value.experimentId !== "g1-cmu-path-v1"
+    || value.cases.map(trial => trial.name).join("/") !== "baseline/heading_feedback")) {
+    throw new Error("Path comparison requires both measured controller cases");
   }
 }
 
@@ -126,7 +149,7 @@ app.innerHTML = `
   <main class="physics-layout">
     <section class="physics-stage" aria-label="Recorded G1 physics replay">
       <div id="physics-scene"></div>
-      <div class="physics-overlay"><div class="eyebrow">${mocapReplay ? "EXPERIMENT 007 / CMU PHYSICAL TRACKING" : "EXPERIMENT 002 / PRETRAINED INFERENCE"}</div><h1>${mocapReplay ? "Physical steps.<br><em>Tracking drift.</em>" : "From poses<br>to <em>physics.</em>"}</h1><p>Recorded MuJoCo body transforms.<br>Actual pretrained actions. No browser inference.</p></div>
+      <div class="physics-overlay"><div class="eyebrow">${pathReplay ? "EXPERIMENT 008 / NEW HEADING FEEDBACK" : mocapReplay ? "EXPERIMENT 007 / CMU PHYSICAL TRACKING" : "EXPERIMENT 002 / PRETRAINED INFERENCE"}</div><h1>${pathReplay ? "Less drift.<br><em>Still outside limits.</em>" : mocapReplay ? "Physical steps.<br><em>Tracking drift.</em>" : "From poses<br>to <em>physics.</em>"}</h1><p>Recorded MuJoCo body transforms.<br>Actual pretrained actions. No browser inference.</p></div>
       <span id="physics-status" class="physics-status">LOADING VERIFIED ROLLOUT</span>
       <div class="physics-legend"><span>TEAL / SIMULATED G1</span><span>AMBER / REFERENCE</span></div>
     </section>
@@ -134,22 +157,37 @@ app.innerHTML = `
       <div class="eyebrow">CPU POLICY CHECK</div><h2>Pretrained, not pretended.</h2>
       <p id="policy-name"></p>
       <p class="physics-note">A 29-action NVIDIA tracker drove a floating-base G1 in CPU MuJoCo. This player shows the saved result, including tracking errors and any falls.</p>
-      <label for="physics-case">${mocapReplay ? "CMU motion reference" : "Self-authored reference"}</label><select id="physics-case" disabled></select>
+      <label for="physics-case">${pathReplay ? "Same reference / different controller" : mocapReplay ? "CMU motion reference" : "Self-authored reference"}</label><select id="physics-case" disabled></select>
+      <p id="path-controller-note" class="physics-note" hidden></p>
       <label class="ghost-label"><input id="physics-ghost" type="checkbox" checked /> Show reference skeleton</label>
       <div class="physics-summary"><span id="completion">--</span><span id="fall-result">--</span></div>
       <div class="metric"><span>TRIAL JOINT RMSE</span><div><output id="trial-error">--</output><small>rad</small></div><p>Across all 29 joints and control samples</p></div>
       <div class="metric"><span>MEAN CPU INFERENCE</span><div><output id="inference-time">--</output><small>ms</small></div><p>One ONNX Runtime thread</p></div>
       <div class="physics-live"><span>FRAME ROOT HEIGHT <output id="physics-height">--</output></span><span>FRAME JOINT RMS <output id="physics-error">--</output></span><span>CONTACT CONSTRAINTS <output id="physics-contacts">--</output></span></div>
       <div id="mocap-physical-outcome" class="physics-note" hidden></div>
-      <p class="physics-note">${mocapReplay
+      <p class="physics-note">${locomotionReplay
         ? "Original-timing CMU 07/04 tracking, initialized once from a moving reference pose and velocity. Not a start-from-rest controller. All later motion is actual free-base physics. Four verified steps do not erase the failed world-space tracking gates."
         : "Two synthetic references are smoke tests, <strong>not a published benchmark or proof of generalization</strong>. No BONES motion files, unsafe pickle loads, training, or real robot were used."}</p>
       <a href="${replayUrl}" download class="replay-download">Download measured rollout JSON &#8599;</a>
       <a href="${mocapReplay ? "./physics.html" : "./physics.html?replay=cmu"}" class="replay-download">${mocapReplay ? "Original ten-second standing / arm replay" : "Watch actual CMU physical stepping (tracking gates failed)"} &#8599;</a>
+      ${pathReplay ? '<a href="#path-comparison-heading" class="replay-download">Compare improvement and degradation below &#8595;</a>'
+        : '<a href="./physics.html?replay=path" class="replay-download">New heading feedback: less drift, still failed tracking &#8599;</a>'}
       <p id="physics-provenance" class="physics-provenance"></p>
     </aside>
     <footer class="physics-transport"><button id="physics-pause" disabled>Pause replay</button><button id="physics-reset" disabled>Restart</button><label for="physics-scrub">Recorded time</label><input id="physics-scrub" type="range" min="0" max="10" step="0.04" value="0" disabled /><output id="physics-time">0.00 s</output></footer>
   </main>
+  <section id="path-comparison-section" class="comparison-section" aria-labelledby="path-comparison-heading" hidden>
+    <div class="eyebrow">FIXED PAIR / SAME INITIAL STATE, REFERENCE AND PHYSICS</div>
+    <h2 id="path-comparison-heading">New feedback improves lateral tracking, not every metric.</h2>
+    <p class="comparison-description">One frozen causal controller changes only future torso yaw: bounded to 25 degrees, smoothed and rate-limited. No physical root resets, forces, joint-reference changes or gain search. This is new external control, not an achievement of the unmodified pretrained policy.</p>
+    <div class="comparison-table-scroll" tabindex="0" aria-label="Baseline versus new heading feedback">
+      <table id="path-comparison-table" class="experiment-table"><caption>Both cases retain the same three failed physical gates</caption><thead><tr><th>Measured result</th><th>Pretrained baseline</th><th>New heading feedback</th></tr></thead><tbody></tbody></table>
+    </div>
+    <p class="comparison-description">Root tracking improves, but along-track lag and left-foot slip worsen. Both retain two verified steps per foot and no detected fall. No success threshold changed. The strict full-joint yaw-invariance diagnostic remains failed; independent one-step maps and near-identical root paths support a limited steering experiment, not a robustness claim.</p>
+    <a href="./path-tracking-v1/diagnosis.json" download class="replay-download comparison-download">Download baseline, transformed diagnostic and complete state traces</a>
+    <a href="./path-tracking-v1/invariance-resolution.json" download class="replay-download comparison-download">Download independent one-step diagnostic resolution</a>
+    <a href="./path-tracking-v1/feedback.json" download class="replay-download comparison-download">Download the complete feedback trial and causal corrections</a>
+  </section>
   <section class="comparison-section" aria-labelledby="comparison-heading">
     <div class="eyebrow">EXPERIMENT 003 / MATCHED CPU COMPARISON</div>
     <h2 id="comparison-heading">Same references. Different outcomes.</h2>
@@ -172,6 +210,51 @@ function node<T extends HTMLElement = HTMLElement>(id: string): T {
   const found = document.getElementById(id);
   if (!found) throw new Error(`Missing element ${id}`);
   return found as T;
+}
+
+function showLocomotion(result: LocomotionOutcome | undefined) {
+  const outcome = node("mocap-physical-outcome");
+  outcome.replaceChildren();
+  outcome.hidden = !result;
+  if (!result) return;
+  const m = result.metrics;
+  const title = document.createElement("strong");
+  title.id = "mocap-physical-verdict";
+  title.textContent = result.passed ? "ALL LOCAL LOCOMOTION GATES PASSED" : "REAL STEPS RECORDED / TRAJECTORY GATES FAILED";
+  outcome.append(title);
+  for (const text of [
+    `Verified steps left / right: ${m.verified_steps_per_foot.join(" / ")}.`,
+    `Forward progress: ${m.forward_progress_m.toFixed(3)} m. Lateral drift: ${m.final_lateral_drift_m.toFixed(3)} m.`,
+    `Root XY RMSE: ${m.root_xy_rmse_m.toFixed(3)} m (limit 0.150 m).`,
+    `Mean foot slip: ${m.mean_contact_slip_m_s.map(v => (v * 1000).toFixed(2)).join(" / ")} mm/s.`,
+    `Failed gates: ${Object.entries(result.gates).filter(([, passed]) => !passed).map(([name]) => name.replaceAll("_", " ")).join(", ") || "none"}.`,
+  ]) {
+    const p = document.createElement("p");
+    p.textContent = text;
+    outcome.append(p);
+  }
+}
+
+function showPathComparison(cases: Trial[]) {
+  node("path-comparison-section").hidden = false;
+  const rows: [string, (trial: Trial) => string][] = [
+    ["Root XY RMSE (limit 0.150 m)", t => `${t.locomotion!.metrics.root_xy_rmse_m.toFixed(3)} m / FAILED`],
+    ["Final world-Y drift (limit 0.150 m)", t => `${t.locomotion!.metrics.final_lateral_drift_m.toFixed(3)} m / FAILED`],
+    ["Mean body-origin error (limit 0.150 m)", t => `${Number(t.metrics.mean_body_position_error_m).toFixed(3)} m / FAILED`],
+    ["Final reference-relative cross-track error", t => `${t.pathMetrics!.final_cross_track_error_m.toFixed(3)} m`],
+    ["Final reference-relative along-track error", t => `${t.pathMetrics!.final_along_track_error_m.toFixed(3)} m`],
+    ["Forward progress (target 2.665 m)", t => `${t.locomotion!.metrics.forward_progress_m.toFixed(3)} m`],
+    ["Verified steps left / right", t => t.locomotion!.metrics.verified_steps_per_foot.join(" / ")],
+    ["Detected fall", t => t.metrics.fell ? "YES" : "No"],
+    ["Mean foot slip L / R", t => `${t.locomotion!.metrics.mean_contact_slip_m_s.map(v => v.toFixed(3)).join(" / ")} m/s`],
+    ["P95 foot slip L / R", t => `${t.locomotion!.metrics.p95_contact_slip_m_s.map(v => v.toFixed(3)).join(" / ")} m/s`],
+    ["Loop wall time (loaded host)", t => `${Number(t.metrics.wall_seconds).toFixed(2)} s`],
+  ];
+  const body = node<HTMLTableElement>("path-comparison-table").tBodies[0];
+  for (const [label, format] of rows) {
+    const row = body.insertRow();
+    for (const text of [label, ...cases.map(format)]) row.insertCell().textContent = text;
+  }
 }
 function fail(error: unknown) {
   console.error(error);
@@ -280,12 +363,14 @@ async function start() {
   scene.add(ghost);
   const point = (p: Point) => new THREE.Vector3(p[0], p[2], -p[1]);
   const up = new THREE.Vector3(0, 1, 0);
-  let trial = replay.cases[0], time = 0, paused = false, rendered = false;
+  let trial = pathReplay ? replay.cases[1] : replay.cases[0], time = 0, paused = false, rendered = false;
   const select = node<HTMLSelectElement>("physics-case");
   for (const item of replay.cases) {
     const option = document.createElement("option");
     option.value = item.name;
     option.textContent = item.name === "stand" ? "Grounded nominal stand"
+      : item.name === "baseline" ? "Baseline: pretrained policy only"
+      : item.name === "heading_feedback" ? "New heading feedback: tracking still failed"
       : item.name === "arm_sweep" ? "Slow symmetric arm sweep" : "CMU 07/04: physical stepping, tracking failed";
     select.append(option);
   }
@@ -296,28 +381,18 @@ async function start() {
     node("fall-result").textContent = trial.metrics.fell ? "FALL DETECTED" : "No fall detected";
     node("fall-result").classList.toggle("warning", Boolean(trial.metrics.fell));
     node<HTMLInputElement>("physics-scrub").max = String(trial.frames.at(-1)!.time);
+    select.value = trial.name;
+    showLocomotion(trial.locomotion ?? replay.locomotion);
+    if (pathReplay) {
+      node("path-controller-note").hidden = false;
+      node("path-controller-note").textContent = trial.name === "heading_feedback"
+        ? "NEW EXTERNAL FEEDBACK: causal root-position/velocity errors steer future torso yaw. Same reference and initial state; not the unmodified pretrained policy."
+        : "UNMODIFIED PRETRAINED BASELINE: reproduced with identical original reference and moving initialization. No external heading correction.";
+    }
   }
   select.addEventListener("change", () => { trial = replay.cases.find(item => item.name === select.value)!; time = 0; setSummary(); });
   node("policy-name").textContent = replay.policy;
-  if (replay.locomotion) {
-    const outcome = node("mocap-physical-outcome"), m = replay.locomotion.metrics;
-    outcome.hidden = false;
-    const title = document.createElement("strong");
-    title.id = "mocap-physical-verdict";
-    title.textContent = replay.locomotion.passed ? "ALL LOCAL LOCOMOTION GATES PASSED" : "REAL STEPS RECORDED / TRAJECTORY GATES FAILED";
-    outcome.append(title);
-    for (const text of [
-      `Verified steps left / right: ${m.verified_steps_per_foot.join(" / ")}.`,
-      `Forward progress: ${m.forward_progress_m.toFixed(3)} m. Lateral drift: ${m.final_lateral_drift_m.toFixed(3)} m.`,
-      `Root XY RMSE: ${m.root_xy_rmse_m.toFixed(3)} m (limit 0.150 m).`,
-      `Mean foot slip: ${m.mean_contact_slip_m_s.map(v => (v * 1000).toFixed(2)).join(" / ")} mm/s.`,
-      `Failed gates: ${Object.entries(replay.locomotion.gates).filter(([, passed]) => !passed).map(([name]) => name.replaceAll("_", " ")).join(", ") || "none"}.`,
-    ]) {
-      const p = document.createElement("p");
-      p.textContent = text;
-      outcome.append(p);
-    }
-  }
+  if (pathReplay) showPathComparison(replay.cases);
   node("physics-provenance").textContent = `Source ${replay.provenance.revision.slice(0, 12)} / recorded ${replay.createdAt.slice(0, 10)}. Model: NVIDIA Open Model License. Robot: Unitree BSD-3-Clause.`;
   node<HTMLInputElement>("physics-ghost").addEventListener("change", event => { ghost.visible = (event.target as HTMLInputElement).checked; });
   function setPaused(value: boolean) {
@@ -358,7 +433,7 @@ async function start() {
       if (!paused) time = (time + Math.min(elapsed, 0.1)) % duration;
       const index = Math.min(trial.frames.length - 1, Math.floor(time / duration * (trial.frames.length - 1)));
       const frame = trial.frames[index];
-      if (mocapReplay) {
+      if (locomotionReplay) {
         const follow = new THREE.Vector3((frame.body[0][0] + frame.reference[0][0]) / 2, .7,
           -(frame.body[0][1] + frame.reference[0][1]) / 2);
         const delta = follow.clone().sub(previousFollow);

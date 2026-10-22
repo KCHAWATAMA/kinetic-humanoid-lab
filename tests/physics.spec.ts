@@ -48,7 +48,7 @@ test("physics replay displays recorded policy data and supports case, pause and 
   await page.locator("#physics-ghost").check();
   await expect(page.locator("#physics-time")).toHaveText("10.00 s");
   await page.screenshot({ path: "test-results/kinetic-physics.png", fullPage: true });
-  await page.locator(".comparison-section").first().screenshot({ path: "test-results/kinetic-comparison.png" });
+  await page.locator('section[aria-labelledby="comparison-heading"]').screenshot({ path: "test-results/kinetic-comparison.png" });
   await page.locator("#locomotion-section").screenshot({ path: "test-results/kinetic-locomotion.png" });
   await page.locator("#mocap-section").screenshot({ path: "test-results/kinetic-mocap.png" });
   await page.setViewportSize({ width: 390, height: 844 });

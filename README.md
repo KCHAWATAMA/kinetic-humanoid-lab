@@ -4,7 +4,9 @@ A local, interactive 3D humanoid playground with analytic limb inverse kinematic
 
 **The interactive playground is a kinematic baseline, not a learned physics controller or a state-of-the-art result.** Feet follow prescribed paths; its body does not simulate forces, contact dynamics, balance, or falls. Small IK residuals are implementation checks, not evidence of physical tracking performance.
 
-**Latest measured result: actual physical stepping, but incomplete trajectory tracking.** A repaired CMU 07/04 reference drove the pretrained G1 through **two verified steps per foot and 2.50 m forward travel in 3.72 seconds**, without a fall or numerical warning. It still drifted **0.78 m sideways** and failed three unchanged tracking gates. [Watch the recorded physical trial](physics.html?replay=cmu) or read [the solver repair, complete ledger and measured results](research/CMU-PHYSICS.md). This is moving-reference tracking, not a start-from-rest controller or a SOTA result.
+**Latest measured result: new heading feedback improves path tracking, but all three tracking gates still fail.** On the same CMU reference and moving initial state, one frozen causal controller reduces root XY error **0.466 to 0.283 m** and final reference-relative cross-track error **0.772 to 0.166 m**, retaining two verified steps per foot and no fall. Along-track lag and left-foot slip worsen. [Compare both recorded physical cases](physics.html?replay=path) and read [the frame audit, failed diagnostic, bounded controller and complete results](research/PATH-TRACKING.md). This is new external feedback, not unmodified pretrained-policy achievement, start-from-rest walking or SOTA.
+
+**Preserved physical-stepping baseline:** the repaired CMU 07/04 reference drove the pretrained G1 through two verified steps per foot and 2.50 m forward travel in 3.72 seconds, without a fall or numerical warning. Its 0.78 m sideways drift and failed gates remain visible in [the original recorded trial](physics.html?replay=cmu) and [retargeting report](research/CMU-PHYSICS.md).
 
 **A separate pretrained-physics checkpoint now runs actual G1 control in CPU MuJoCo.** Two 10-second synthetic-reference trials completed without detected falls. Its [recorded browser replay](physics.html) shows real simulation body transforms and tracking errors; it is not live browser inference. See [the reproduction guide and measured results](research/README.md). Model weights stay in an ignored local cache, not in the repository or web bundle.
 
@@ -40,7 +42,9 @@ Open **http://127.0.0.1:4173**. The server binds to loopback, not the public net
 
 The measured physics replay is at **http://127.0.0.1:4173/physics.html**. Viewing its committed data requires no Python installation. Reproducing the policy rollout requires the separate optional [Python 3.11 CPU environment](research/README.md).
 
-The new actual-stepping trial is at **http://127.0.0.1:4173/physics.html?replay=cmu**. It shows four verified physical steps and the failed trajectory-tracking verdict, with actual/reference skeletons, pause/reset and scrubbing.
+The original actual-stepping trial is at **http://127.0.0.1:4173/physics.html?replay=cmu**. It shows four verified physical steps and the failed trajectory-tracking verdict, with actual/reference skeletons, pause/reset and scrubbing.
+
+The new matched path-control playback is at **http://127.0.0.1:4173/physics.html?replay=path**. Switch between the pretrained baseline and explicitly new heading feedback; the comparison includes improved lateral tracking, worse along-track lag/slip and the unchanged failed gates.
 
 The same page's comparison section reads `public/physics-comparison.json`, separate from the unchanged ten-second replay. Reproduce its fixed twelve-episode matrix with `research\.venv\Scripts\python.exe research\evaluate.py` after following the Python setup guide.
 
@@ -187,6 +191,8 @@ public/mocap/            Rejected candidate, provenance and full execution ledge
 research/constrained_ik.py Finite-difference-verified constrained G1 pose solver
 research/cmu_contact.py  Grounded CMU retarget repair and actual physics trial
 public/mocap-v2/         All repair versions, measured stepping and failed tracking
+research/path_tracking.py Frame diagnosis and one frozen causal heading-feedback comparison
+public/path-tracking-v1/ Complete diagnostic, retained failed check, resolution and physical pair
 tests/kinematics.test.ts Numerical invariants and motion checks
 tests/browser.spec.ts    Browser controls, reach interaction and screenshots
 tests/physics.spec.ts    Recorded replay controls and explicit missing-data error

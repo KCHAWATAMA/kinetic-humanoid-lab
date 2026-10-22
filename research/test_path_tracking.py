@@ -9,7 +9,8 @@ import yaml
 
 from diagnose import expected_observation
 from fetch_assets import MODEL_DIR
-from path_tracking import HeadingFeedback, PROTOCOL, PolicyTrace, path_basis, reference_frames, relative_metrics, transform_state
+from path_tracking import HeadingFeedback, PROTOCOL, PolicyTrace, digest, path_basis, reference_frames, relative_metrics, transform_state
+from locomotion import LocomotionObserver
 from rollout import load_model, make_inputs, make_session
 
 
@@ -121,6 +122,89 @@ class PathTrackingTests(unittest.TestCase):
         np.testing.assert_array_equal(data.qvel, before[1])
         with self.assertRaisesRegex(ValueError, "causal"):
             adapter.run(["joint_pos_targets"], feed)
+
+    def test_saved_diagnosis_preserves_failed_strict_check_and_independent_resolution(self):
+        result = json.loads(Path("public/path-tracking-v1/diagnosis.json").read_text())
+        resolution = json.loads(Path("public/path-tracking-v1/invariance-resolution.json").read_text())
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["checks"]["physical_invariance"])
+        self.assertTrue(resolution["passed"])
+        self.assertTrue(resolution["strictOriginalDiagnosticStillFailed"])
+        self.assertEqual(resolution["independentMapPhysicsSteps"], 440)
+        self.assertEqual(resolution["policyCalls"], 0)
+        self.assertLess(max(r["jointMaxRad"] for r in resolution["oneStepMaps"]), 1e-10)
+        self.assertEqual(result["episodes"][0]["physics"]["frames"], self.old["physics"]["frames"])
+        self.assertEqual(result["episodes"][0]["locomotion"], self.old["locomotion"])
+        for key, value in result["reference"].items():
+            if key.endswith("MaxError"):
+                self.assertLess(value, 1e-10)
+        self.assertIn("left_ankle_roll_joint", result["reference"]["initialActiveJointLimits"])
+        self.assertAlmostEqual(result["reference"]["initialSourceRootVelocity"][1], -.0702562268, places=7)
+        for path, expected in result["historicalSha256"].items():
+            self.assertEqual(digest(Path(path)), expected)
+
+    def test_feedback_outcome_is_measured_against_unchanged_reference_and_gates(self):
+        result = json.loads(Path("public/path-tracking-v1/feedback.json").read_text())
+        episode = result["episodes"][0]
+        self.assertEqual(result["physicalCriteria"], self.old["physicalProtocol"]["criteria"])
+        self.assertEqual(episode["states"][0]["qpos"], self.old["initialState"]["qpos"])
+        self.assertEqual(episode["states"][0]["qvel"], self.old["initialState"]["qvel"])
+        self.assertEqual(episode["physics"]["metrics"]["controller_calls"], 186)
+        self.assertEqual(episode["physics"]["metrics"]["physics_steps"], 3720)
+        observer = LocomotionObserver(self.old["physicalProtocol"], .02)
+        observer.samples = episode["locomotion"]["samples"]
+        for sample in observer.samples:
+            for side, counter in enumerate(observer.counters):
+                counter.sample(sample["time"], np.asarray(sample["feet"][side]), sample["loaded"][side])
+        self.assertEqual(observer.summarize(episode["physics"]["metrics"]), episode["locomotion"])
+        self.assertEqual([name for name, passed in episode["locomotion"]["gates"].items() if not passed],
+                         ["lateral_drift", "root_tracking", "body_tracking"])
+        self.assertEqual(episode["locomotion"]["metrics"]["verified_steps_per_foot"], [2, 2])
+        self.assertLess(episode["relativeMetrics"]["root_xy_rmse_m"], .3)
+        self.assertGreater(abs(episode["relativeMetrics"]["final_along_track_error_m"]), .3)
+        data = mujoco.MjData(self.model)
+        for frame, old_frame in zip(episode["physics"]["frames"], self.old["physics"]["frames"]):
+            self.assertEqual(frame["reference"], old_frame["reference"])
+            step = round(frame["time"] / .02)
+            data.qpos[:] = episode["states"][step]["qpos"]
+            mujoco.mj_forward(self.model, data)
+            np.testing.assert_array_equal(np.round(data.xpos[1:], 5), frame["body"])
+
+    def test_recorded_feedback_is_recomputed_causally_with_real_policy_outputs(self):
+        episode = json.loads(Path("public/path-tracking-v1/feedback.json").read_text())["episodes"][0]
+        controller = HeadingFeedback(self.protocol["feedback"], self.frames, 186, .02)
+        last = 0.
+        data = mujoco.MjData(self.model)
+        for step, saved in enumerate(episode["corrections"]):
+            state = episode["states"][step]
+            computed = controller.update(np.array(state["qpos"][:3]), np.array(state["qvel"][:3]), self.frames[step])
+            self.assertEqual(saved, computed)
+            self.assertLessEqual(abs(saved["angle_rad"] - last), np.radians(60) * .02 + 1e-12)
+            self.assertLessEqual(abs(saved["angle_rad"]), np.radians(25))
+            last = saved["angle_rad"]
+            if step in self.protocol["probe_indices"]:
+                data.qpos[:], data.qvel[:] = state["qpos"], state["qvel"]
+                mujoco.mj_forward(self.model, data)
+                previous = np.asarray(episode["commands"][step - 1]) if step else np.zeros(29)
+                feed = make_inputs(data, self.meta, [self.frames[step + o] for o in (1, 2, 4, 8)], previous)
+                feed = controller.apply(feed, saved["angle_rad"])
+                expected = self.session.run(["joint_pos_targets"], feed)[0][0]
+                np.testing.assert_array_equal(expected, episode["commands"][step])
+
+    def test_export_is_an_exact_projection_and_refuses_overwrite(self):
+        from export_path import export
+        directory = Path("public/path-tracking-v1")
+        replay = json.loads((directory / "physics-replay.json").read_text())
+        baseline = json.loads((directory / "diagnosis.json").read_text())["episodes"][0]
+        feedback = json.loads((directory / "feedback.json").read_text())["episodes"][0]
+        for case, source in zip(replay["cases"], (baseline, feedback)):
+            for key, value in source["physics"].items():
+                self.assertEqual(case[key], value)
+            self.assertEqual(case["pathMetrics"], source["relativeMetrics"])
+        for name, expected in replay["sourceArtifacts"].items():
+            self.assertEqual(digest(directory / name), expected)
+        with self.assertRaises(FileExistsError):
+            export(directory)
 
 
 if __name__ == "__main__":
