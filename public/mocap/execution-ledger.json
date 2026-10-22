@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "mocap-reference-execution-ledger",
+  "identity": "g1-cmu-07-04-v1",
+  "protocolSha256": "93c203fa71a194fba463fcb8acc745c2628f0f8090e2c2327a3e5d1673c22a49",
+  "physicalTrials": 0,
+  "policyCalls": 0,
+  "physicsSteps": 0,
+  "runtime": {
+    "python": "3.11.9",
+    "numpy": "2.2.6",
+    "mujoco": "3.3.7"
+  },
+  "executions": [
+    {
+      "sequence": 0,
+      "artifact": "interrupted-preflight.json",
+      "outcome": "serialization_error",
+      "error": "TypeError: Object of type bool is not JSON serializable",
+      "explanation": "A NumPy-valued ground-penetration metric produced a NumPy Boolean gate. The final report failed JSON encoding; the initial running-state reservation is retained byte-for-byte. It is not still running and contains no final measurements."
+    },
+    {
+      "sequence": 1,
+      "artifact": "g1-cmu-07-04-v1.json",
+      "outcome": "reference_failed",
+      "changes": "Convert the ground-penetration metric to a Python float; make held-pose diagnostics match the already-held lookahead poses. No source, motion timing, contact threshold, retarget parameter or acceptance gate changed.",
+      "explanation": "The unchanged candidate protocol failed preflight. No ONNX session was created and no dynamics steps were taken. Subsequent deterministic regression reproductions are not additional physical trials."
+    }
+  ],
+  "interpretation": "Reference FK diagnostics are not physical locomotion measurements. No physical steps, progress, falls or contact slip were measured for this source."
+}

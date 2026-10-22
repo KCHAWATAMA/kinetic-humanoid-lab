@@ -1,0 +1,39 @@
+{
+  "id": "g1-self-authored-slow-walk-v2",
+  "change_reason": "Attempt 1 never unloaded either foot (minimum intended-swing loads 89.85/84.63 N). One final variant doubles reference clearance and increases stance-side shift, retaining timing, target progress and every success criterion. Stop after this attempt regardless of outcome.",
+  "seconds": 8,
+  "initial_hold_s": 1,
+  "step_count": 4,
+  "step_period_s": 1.2,
+  "swing_start_s": 0.25,
+  "swing_end_s": 0.95,
+  "step_length_m": 0.1,
+  "foot_clearance_m": 0.08,
+  "stance_root_shift_m": 0.10,
+  "wall_limit_seconds": 120,
+  "maximum_attempts": 2,
+  "criteria": {
+    "minimum_forward_progress_m": 0.25,
+    "maximum_forward_progress_m": 0.45,
+    "maximum_final_lateral_drift_m": 0.15,
+    "maximum_root_xy_rmse_m": 0.15,
+    "maximum_joint_rmse_rad": 0.30,
+    "maximum_mean_body_error_m": 0.15,
+    "minimum_verified_steps_per_foot": 2,
+    "minimum_support_fraction_after_half_second": 0.90,
+    "maximum_mean_contact_slip_m_s": 0.08,
+    "maximum_p95_contact_slip_m_s": 0.20
+  },
+  "step_detection": {
+    "loaded_foot_normal_force_n": 5,
+    "minimum_air_time_s": 0.10,
+    "minimum_clearance_above_liftoff_m": 0.02,
+    "minimum_forward_landing_distance_m": 0.05
+  },
+  "reference_gates": {
+    "maximum_foot_position_error_m": 0.0002,
+    "maximum_foot_orientation_error_rad": 0.001,
+    "maximum_joint_velocity_rad_s": 4
+  },
+  "interpretation": "All criteria plus full completion, zero numerical warnings and no detected fall are required. Root translation is only a reference/metric, never written into simulated state after initialization. Existing ONNX export has no root-position or root-linear-velocity input. No tuning until success; retain every attempt."
+}

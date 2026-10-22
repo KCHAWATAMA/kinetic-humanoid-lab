@@ -1,0 +1,54 @@
+{
+  "id": "g1-cmu-contact-v2.2",
+  "source_fps": 120,
+  "seconds": 3.72,
+  "control_dt": 0.02,
+  "maximum_physics_trials": 1,
+  "wall_limit_seconds": 120,
+  "reference_wall_limit_seconds": 300,
+  "retarget": {
+    "contact_horizontal_speed_m_s": 0.5,
+    "contact_vertical_speed_m_s": 0.5,
+    "maximum_contact_gap_s": 0.05,
+    "minimum_source_stance_s": 0.10,
+    "floor_padding_m": 0.002,
+    "root_translation_bound_m": [0.12, 0.12, 0.12],
+    "solver_iterations": 150,
+    "bounded_least_squares_seed_evaluations": 80,
+    "temporal_constraint": "Enforce consecutive joint displacement <= existing 8 rad/s gate times 0.02 s inside every solve, including cold retry. Do not merely detect singular-knee velocity jumps afterward.",
+    "maximum_solver_starts_per_frame": 2,
+    "scope": "Same CMU07/04 timing and source hashes; full pelvis/torso orientation, exact G1 limb scale and hip offsets; nominal arms. Marker endpoints are not soles: infer slow-foot intervals from horizontal AND vertical speed, not a global marker-height cutoff. Calibrate foot pitch from mid-stance, preserve heel/toe pitch, hold stance yaw and zero unobservable sole roll. Rock exact G1 capsule geometry about successive support endpoints. Blend source corrections through swing. SLSQP enforces joint/tendon/floor constraints and bounded root translation; reject failed fits before reusing a warm start."
+  },
+  "reference_gates": {
+    "maximum_foot_position_error_m": 0.02,
+    "maximum_foot_orientation_error_rad": 0.15,
+    "maximum_torso_orientation_error_rad": 0.05,
+    "maximum_joint_velocity_rad_s": 8,
+    "maximum_root_speed_m_s": 1.5,
+    "maximum_ground_penetration_m": 0.00001,
+    "maximum_stance_gap_m": 0.004,
+    "maximum_mean_stance_point_speed_m_s": 0.08,
+    "maximum_p95_stance_point_speed_m_s": 0.20,
+    "minimum_source_support_fraction": 0.85,
+    "minimum_reference_swing_clearance_m": 0.02
+  },
+  "fit_criteria_rationale": "Human ankle/forefoot bone endpoints do not correspond exactly to G1 ankle origins or sole frames. The 2 cm/0.15 rad SOFT source-fit tolerances reflect sub-foot-size morphology/frame approximation, not physical constraint tolerances. Exact joint/tendon inequalities, 10 micrometre numerical floor tolerance, 4 mm planted-contact gap, 8 rad/s continuity and contact-point speed checks independently protect geometric validity. Root adaptation is bounded to 12 cm (less than one fifth of the 62 cm leg), allowing morphology and heel/toe transfer, not root teleportation in physics. Physical success criteria remain byte-for-byte equal to the v1 prospective criteria.",
+  "progress_gate_ratio": [0.7, 1.3],
+  "criteria": {
+    "maximum_final_lateral_drift_m": 0.15,
+    "maximum_root_xy_rmse_m": 0.15,
+    "maximum_joint_rmse_rad": 0.30,
+    "maximum_mean_body_error_m": 0.15,
+    "minimum_verified_steps_per_foot": 1,
+    "minimum_support_fraction_after_half_second": 0.90,
+    "maximum_mean_contact_slip_m_s": 0.08,
+    "maximum_p95_contact_slip_m_s": 0.20
+  },
+  "step_detection": {
+    "loaded_foot_normal_force_n": 5,
+    "minimum_air_time_s": 0.10,
+    "minimum_clearance_above_liftoff_m": 0.02,
+    "minimum_forward_landing_distance_m": 0.05
+  },
+  "initialization": "Initialize once from validated reference frame0 qpos and finite-difference qvel, including root translation and local angular velocity. Zero action history, as deployed. This is moving-mocap tracking, not learning to start walking from rest. No state overwrites, external forces or reference-dependent interventions after initialization."
+}

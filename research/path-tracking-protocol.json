@@ -1,0 +1,30 @@
+{
+  "id": "g1-cmu-path-v1",
+  "reference_artifact": "public/mocap-v2/attempt-03.json",
+  "reference_sha256": "872cf20b2435ce35206c67d799c7011b0369b751294948a7f15febcada313331",
+  "seconds": 3.72,
+  "wall_limit_seconds_per_case": 120,
+  "physics_cases": ["baseline", "baseline_common_transform", "heading_feedback"],
+  "common_transform": {"yaw_degrees": 37, "translation_m": [1.2, -0.7, 0]},
+  "diagnostic_limits": {
+    "baseline_root_reproduction_m": 1e-10,
+    "derivative_consistency": 1e-10,
+    "graph_observation_invariance": 0.000003,
+    "graph_target_invariance_rad": 0.0001,
+    "trajectory_invariance_m": 0.01,
+    "joint_trajectory_invariance_rad": 0.02
+  },
+  "probe_indices": [0, 10, 25, 50, 100, 150, 185],
+  "feedback": {
+    "position_gain_per_second": 1.0,
+    "velocity_gain": 1.0,
+    "minimum_forward_speed_m_s": 0.25,
+    "maximum_yaw_degrees": 25,
+    "maximum_yaw_rate_degrees_s": 60,
+    "smoothing_time_s": 0.15
+  },
+  "feedback_definition": "Using the fixed reference start-to-end course, compute cross-track position error and reference-minus-actual root lateral velocity. Desired yaw offset is atan2(position_gain*cross_track_error + velocity_gain*lateral_velocity_error, max(reference_forward_velocity, minimum_forward_speed)). Clamp to 25 degrees, low-pass with 0.15 s time constant, and rate-limit to 60 degrees/s. Apply the SAME world-up yaw offset by left multiplication to all four future torso quaternions. Hold that offset over the lookahead horizon; preserve relative future rotations. No joint, joint-velocity, contact, root or duration reference changes.",
+  "design_rationale": "A one-second lateral position recovery time and unit velocity-error damping are interpretable outer-loop defaults, not fitted to a successful trial. The yaw/rate limits restrict this to modest steering; smoothing is comparable to the 0.16 s policy horizon. The frozen three-case scope permits no gain search.",
+  "comparison": "Baseline and feedback use identical saved reference poses, initial pose/velocity, policy, physics, gains, timing and zero action history. Every original physical criterion remains in force. Also report reference-relative cross-track and along-track errors in a rigid-transform-invariant path frame; do not substitute these for the original gates.",
+  "scope": "One reproduced baseline, one common-yaw/translation invariance rollout, and one new causal heading-feedback trial only after diagnosis passes. Static graph probes are counted separately. No post-initialization state assignment, external forces, policy training, source changes or threshold relaxation."
+}
