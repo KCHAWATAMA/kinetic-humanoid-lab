@@ -148,3 +148,60 @@ Every case is retained below. Joint and body errors include the entire five seco
 | Arm sweep | Push seed 29 | Direct PD | 1.34 s | 0.100333 | 0.808472 | 8.23 |
 
 The browser displays this recorded comparison below the independent ten-second replay. A missing or unfinished comparison produces an explicit error without disabling replay; it never substitutes invented results or presents partial wins.
+
+## Bounded physical locomotion experiment
+
+The frozen `locomotion-protocol.json` defines an eight-second slow-walk attempt, with at most two recorded attempts and no overwrite of existing attempt files. The initial second is a nominal stand, followed by four alternating 1.2-second steps and a final hold. Foot placements advance 0.10 m per alternating step, ending at a 0.35 m reference root advance; each swing has 0.04 m clearance. Smooth quintic transfers shift the reference root 0.08 m toward the stance foot. This is a kinematically coherent candidate, **not a dynamically validated walking trajectory**.
+
+The browser playground's two-bone solver cannot represent G1's six-joint leg axes, foot orientation or coupled ankle limits. Instead, the generator uses MuJoCo's exact Jacobians and joint limits, with bounded damped least-squares leg IK, constant foot orientation and stationary world-space stance feet. Joint velocities are finite differences of the resulting coherent poses. Every frame must satisfy position/orientation residual gates, joint and ankle-tendon bounds, and a 4 rad/s reference-joint-velocity ceiling before policy rollout is allowed.
+
+**Contract limitation:** inspection of the pinned ONNX metadata confirms only future joint positions/velocities and torso rotations condition this export. Root position and root linear velocity are not actual ONNX inputs, despite appearing as passthrough metadata. The generated root path is used for reference IK and error measurement only. It is never assigned to simulated root state after initialization. Root progress must emerge from policy torques and contact dynamics.
+
+Before rollout, success is fixed as: all eight seconds completed, no fall or numerical warning, 0.25-0.45 m actual forward root progress, final lateral drift at most 0.15 m, root XY tracking RMSE at most 0.15 m, joint RMSE at most 0.30 rad, mean body-origin error at most 0.15 m, and at least two physically verified steps **per foot**. Support must be present in at least 90% of samples after the initial half-second. Per-foot mean/p95 contact slip must not exceed 0.08/0.20 m/s. All gates must pass; airborne feet or root translation alone cannot count as walking.
+
+At each 50 Hz control sample, foot-floor normal forces are read from MuJoCo contacts; a foot is loaded only above 5 N total normal force. Tangential world velocity at each physical contact point is computed from its Jacobian and actual generalized velocity, then normal-force-weighted within each foot. Mean and p95 slip use only loaded samples; no loaded samples means unavailable, not zero slip. Integrated slip is a sampled estimate, not continuous 1 kHz ground truth. A verified step needs a loaded-to-unloaded-to-loaded transition, at least 0.10 s airborne, 0.02 m rise above liftoff, and 0.05 m forward landing displacement. Sliding while continuously loaded does not count.
+
+```powershell
+& research\.venv\Scripts\python.exe -m unittest discover -s research -p "test_locomotion.py" -v
+& research\.venv\Scripts\python.exe research\locomotion.py --attempt 1
+```
+
+Results go to `public/locomotion/attempt-01.json`. Existing files are never overwritten; use `--output-dir .research-cache\locomotion-reproduction` for independent reproduction. An unsuccessful experiment exits nonzero **after saving** configuration, reference diagnostics, real physics frames, every contact/root sample, failed gates and provenance. A reference-generation failure is recorded explicitly without claiming any physics rollout. The per-attempt wall budget is 120 seconds, checked between control steps. The existing ten-second replay and twelve-case comparison remain separate and unchanged.
+
+### Attempt ledger
+
+1. **Attempt 01 / v1:** eight seconds completed, no fall or numerical warning, but no physically verified steps. Both feet were loaded at all 400 post-initial samples. During intended swings, minimum foot loads were 89.85/84.63 N; actual foot height excursions after the initial hold were only 0.050/0.293 mm. Actual root progress was **-0.025202 m**, not the +0.35 m target. Root XY RMSE 0.253816 m and mean body-origin error 0.216728 m failed their gates despite joint RMSE 0.154050 rad and low contact slip. The robot stood and adjusted its joints; this is **not physical walking**.
+2. **Attempt 02 / v2, fixed before its rollout:** the final engineering variant increased foot clearance from 0.04 to 0.08 m and stance-side reference shift from 0.08 to 0.10 m, testing whether stronger leg/lateral motion prompts unloading. Timing, target progress, physical model and every pass criterion were unchanged. Its complete configuration is `locomotion-protocol-02.json`; invoke `research\locomotion.py --attempt 2`. It also completed eight seconds without falling but produced zero verified steps, -0.023673 m root progress, and failed the same four gates. Intended-swing foot loads never fell below 56.51/67.55 N. This was an adaptive engineering attempt, not an independent confirmation or benchmark sample. **Stopped after two attempts, with no physical walking achieved.**
+
+Reference generation passed its numerical gates before the first physical attempt; there were no discarded physical trials or unrecorded parameter sweeps.
+
+| Recorded measure | Attempt 01 | Attempt 02 |
+| --- | ---: | ---: |
+| Reference clearance / stance-side shift | 0.04 / 0.08 m | 0.08 / 0.10 m |
+| Completed duration / numerical warnings | 8 s / 0 | 8 s / 0 |
+| Detected falls | 0 | 0 |
+| Reference / actual forward progress | +0.35 / **-0.025202 m** | +0.35 / **-0.023673 m** |
+| Verified steps, left / right | **0 / 0** | **0 / 0** |
+| Root XY RMSE (gate: <= 0.15 m) | **0.253816 m** | **0.254879 m** |
+| Mean body-origin error (gate: <= 0.15 m) | **0.216728 m** | **0.219110 m** |
+| Joint RMSE (gate: <= 0.30 rad) | 0.154050 rad | 0.158684 rad |
+| Loaded samples, left / right | 400 / 400 | 400 / 400 |
+| Mean contact slip, left / right | 0.418 / 0.507 mm/s | 0.469 / 0.606 mm/s |
+| P95 contact slip, left / right | 0.679 / 0.802 mm/s | 0.781 / 1.519 mm/s |
+| Foot height excursion after initial hold, left / right | 0.050 / 0.293 mm | 0.078 / 0.470 mm |
+| Loop wall time | 7.977 s | 7.612 s |
+| Overall fixed locomotion gates | **Failed** | **Failed** |
+
+Each attempt executed 400 actual ONNX calls and 8,000 physics steps, with 401 force/root samples and 201 recorded body/reference frames. Both reference generators stayed below 0.000001 m foot-position error and satisfied actual G1 joint/tendon constraints; maximum reference joint velocities were 1.570 / 2.770 rad/s. That establishes kinematic feasibility, **not dynamic feasibility or policy compatibility**.
+
+The concrete failure is lack of foot unloading and progress, not a missing GPU or inability to run physics. The controller kept both feet planted while accommodating some joint motion. The export cannot directly consume the planned root position or linear velocity, but these experiments do not isolate that omission as the cause. A compatible, dynamically credible locomotion reference and/or a controller with the needed tracking contract must be validated before claiming walking; repeatedly increasing motion amplitudes without such evidence is not justified.
+
+Timing improved when this host was less loaded: near-real-time loop timing in these two runs is not a real-time guarantee, a controlled comparison with earlier runs, or evidence of successful locomotion.
+
+`public/locomotion/attempt-01.json` and `attempt-02.json` retain complete failed outputs. Their embedded protocols and execution-time source hashes preserve the attempted configurations. The small browser summary is derived without changing either artifact:
+
+```powershell
+& research\.venv\Scripts\python.exe research\locomotion.py --summarize
+```
+
+The physics page's locomotion section reports **no physical walking achieved**, links both full artifacts, and does not substitute the kinematic playground or standing replay. Tests independently recompute every stored locomotion metric/gate from recorded samples and check that attempts cannot be overwritten or extended beyond the declared bound.

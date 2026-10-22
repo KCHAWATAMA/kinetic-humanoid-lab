@@ -49,5 +49,12 @@
 #comparison-table th { font-weight: 400; color: #96b3bf; }
 #comparison-table tr[data-failed="true"] td:nth-child(4) { color: #ffbd69; }
 .comparison-download { display: inline-block; }
+.experiment-table { width: 100%; border-collapse: collapse; font: 11px/1.7 Consolas, monospace; text-align: left; }
+.experiment-table caption { text-align: left; padding: 14px; color: #a1f1cd; }
+.experiment-table th, .experiment-table td { padding: 12px; border-top: 1px solid #23313a; min-width: 150px; }
+.experiment-table th { color: #96b3bf; font-weight: 400; }
+#locomotion-status { color: #ffbd69; font: 11px/1.7 Consolas, monospace; }
+#locomotion-error:not([hidden]) { padding: 16px; border: 1px solid #edb582; color: #ffe1b4; font-size: 12px; }
+#locomotion-downloads { display: flex; gap: 12px; flex-wrap: wrap; }
 @media (max-width: 760px) { .comparison-section { padding: 24px 16px; } .comparison-summary { grid-template-columns: 1fr; } .comparison-card { padding: 16px; } }
 @media (max-width: 760px) { .physics-layout { display: flex; flex-direction: column; } .physics-stage { height: 580px; } .physics-details { border-left: 0; border-top: 1px solid #23313a; order: 2; } .physics-transport { order: 1; padding: 16px; gap: 10px; flex-wrap: wrap; } .physics-transport label { display: none; } .physics-overlay { left: 22px; top: 25px; } .physics-overlay h1 { font-size: 31px; } .physics-status { left: 20px; bottom: 45px; } .physics-legend { left: 20px; bottom: 25px; right: auto; font-size: 7px; } .back-link { font-size: 9px; max-width: 75px; } .physics-transport button { padding: 8px; font-size: 10px; } }

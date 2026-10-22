@@ -8,6 +8,7 @@ revision in fetch_assets.py. No upstream executable code or pickle is loaded.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -213,7 +214,9 @@ def controller_target(controller: str, session: ort.InferenceSession | None, dat
 
 def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: dict, default: np.ndarray,
              case: str, seconds: float, *, controller: str = "onnx", pushes: tuple[Push, ...] = (),
-             record_frames: bool = True, wall_limit_seconds: float | None = None) -> dict:
+             record_frames: bool = True, wall_limit_seconds: float | None = None,
+             reference_frames: list[dict] | None = None,
+             observe: Callable[[mujoco.MjModel, mujoco.MjData, int, dict], None] | None = None) -> dict:
     if controller not in ("onnx", "direct_pd") or (controller == "onnx" and session is None):
         raise ValueError("Invalid controller or missing policy.")
     if not math.isfinite(seconds) or not 1 <= seconds <= 30:
@@ -229,7 +232,8 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: 
     anchor = meta["robot"]["anchor_body_index"] + 1
     reference_data = mujoco.MjData(model)
     references = []
-    for i in range(steps + max(meta["motion"]["future_step_indices"]) + 1):
+    required_frames = steps + max(meta["motion"]["future_step_indices"]) + 1
+    for i in range(required_frames if reference_frames is None else 0):
         q, v = reference_pose(default, meta["robot"]["joint_names"], i * dt, case)
         reference_data.qpos[:3] = [0, 0, height]
         reference_data.qpos[3:7] = [1, 0, 0, 0]
@@ -240,6 +244,17 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: 
             "anchor": xyzw(reference_data.xquat[anchor]),
             "body": reference_data.xpos[1:].copy(),
         })
+    if reference_frames is not None:
+        if len(reference_frames) < required_frames:
+            raise ValueError("Reference must cover the rollout and policy lookahead.")
+        for frame in reference_frames:
+            for key, shape in (("q", (29,)), ("v", (29,)), ("anchor", (4,)), ("body", (33, 3))):
+                value = np.asarray(frame[key])
+                if value.shape != shape or not np.isfinite(value).all():
+                    raise ValueError(f"Invalid reference {key}.")
+        if not np.allclose(reference_frames[0]["q"], default, atol=1e-6) or not np.allclose(reference_frames[0]["body"][0], [0, 0, height], atol=1e-6):
+            raise ValueError("Reference must start at the unchanged nominal initial state.")
+        references = reference_frames
     data = mujoco.MjData(model)
     data.qpos[:3] = [0, 0, height]
     data.qpos[3:7] = [1, 0, 0, 0]
@@ -256,6 +271,8 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: 
     started = time.perf_counter()
     for step in range(steps + 1):
         reference = references[step]
+        if observe is not None:
+            observe(model, data, step, reference)
         joint_error = float(np.sqrt(np.mean((data.qpos[7:] - reference["q"]) ** 2)))
         body_error = float(np.mean(np.linalg.norm(data.xpos[1:] - reference["body"], axis=1)))
         pelvis_up = float(data.xmat[1, 8])

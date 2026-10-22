@@ -8,6 +8,8 @@ A local, interactive 3D humanoid playground with analytic limb inverse kinematic
 
 **A fixed matched comparison now includes the failures too.** Across six five-second cases per controller (two references, nominal and two seeded push conditions), pretrained ONNX had 0/6 falls and direct PD had 6/6. Direct PD nevertheless had **lower joint RMSE and shorter wall time**. The physics page includes every episode, pooled errors and full protocol provenance; this is a small synthetic comparison, not a published benchmark.
 
+**Physical walking has not been achieved.** Two bounded eight-second, self-authored slow-walk experiments completed without falls, but neither foot took a verified step and the roots moved slightly backward. Both failed the progress and world-space tracking criteria. Their complete configurations, contact/slip telemetry, failed gates and frames are retained—not presented as successful walking.
+
 ![Kinetic desktop demo, captured by the software-rendered browser smoke test](docs/demo.png)
 
 ![Recorded pretrained G1 physics, with simulated and reference skeletons](docs/physics-demo.png)
@@ -33,6 +35,8 @@ Open **http://127.0.0.1:4173**. The server binds to loopback, not the public net
 The measured physics replay is at **http://127.0.0.1:4173/physics.html**. Viewing its committed data requires no Python installation. Reproducing the policy rollout requires the separate optional [Python 3.11 CPU environment](research/README.md).
 
 The same page's comparison section reads `public/physics-comparison.json`, separate from the unchanged ten-second replay. Reproduce its fixed twelve-episode matrix with `research\.venv\Scripts\python.exe research\evaluate.py` after following the Python setup guide.
+
+Failed locomotion evidence is at **http://127.0.0.1:4173/physics.html#locomotion-heading**. See the [bounded experiment and reproduction commands](research/README.md#bounded-physical-locomotion-experiment). Attempt files are immutable; use a separate output directory when reproducing them.
 
 ## Explore
 
@@ -74,11 +78,11 @@ The numerical tests print their measured maxima and enforce these thresholds:
 | Gait boundary continuity | Stance/swing and cycle boundaries | Position difference < 0.0000001 m |
 | Pause, reset, replay | Identical input sequences | Exact deterministic state equality |
 
-Browser tests run serially to limit memory use, with a bounded four-minute timeout per test for loaded machines. They use Chromium's software WebGL backend so the smoke test does not depend on a dedicated GPU. They exercise all motion modes, pause/reset, tempo, steering, target reach limits, direct target dragging, keyboard pause, overlay, export and mobile layout, plus physics replay controls, all comparison rows including failures, responsive tables, and explicit missing/unfinished-data errors. Screenshots are written to `test-results/kinetic-desktop.png`, `test-results/kinetic-mobile.png`, `test-results/kinetic-physics.png` and `test-results/kinetic-comparison.png`. Both viewers redraw paused scenes only after interaction or a camera/viewport change. The exported FPS counts actual renders, so it can drop to zero while paused; it is not a promised hardware-independent rate.
+Browser tests run serially to limit memory use, with a bounded four-minute timeout per test and up to one minute for software-rendered replay readiness on loaded machines. They use Chromium's software WebGL backend so the smoke test does not depend on a dedicated GPU. They exercise all motion modes, pause/reset, tempo, steering, target reach limits, direct target dragging, keyboard pause, overlay, export and mobile layout, plus physics replay controls, all comparison rows including failures, both failed locomotion attempts, responsive tables, and explicit missing/unfinished-data errors. Screenshots are written to `test-results/kinetic-desktop.png`, `test-results/kinetic-mobile.png`, `test-results/kinetic-physics.png`, `test-results/kinetic-comparison.png` and `test-results/kinetic-locomotion.png`. Both viewers redraw paused scenes only after interaction or a camera/viewport change. The exported FPS counts actual renders, so it can drop to zero while paused; it is not a promised hardware-independent rate.
 
-### Recorded local run (21 October 2026)
+### Recorded local checks
 
-Node 24.22.1 and Python 3.11.9 on Windows: **6 kinematics tests, 12 deployment/replay/comparison tests and 7 browser tests passed**, and the TypeScript / Vite production build passed. The final browser suite took about 3.7 minutes with one worker and software rendering; trace recording is disabled to avoid memory-heavy screenshots during every action. Earlier checkpoint attempts timed out under host load; paused-scene redraw reduction and the bounded slow-host timeout allowed the complete suite to pass.
+Node 24.22.1 and Python 3.11.9 on Windows: **6 kinematics tests, 21 Python physics/evidence tests, and all 8 browser checks passed**, and the TypeScript / Vite production build passed. The three original playground browser checks passed in the full run; two physics checks initially exceeded the 15-second software-renderer readiness wait. After bounding that readiness wait at 60 seconds, the targeted five physics checks all passed in 4.1 minutes. Trace recording remains disabled for memory use. These are software/measurement checks: **the physical walking criteria failed in both recorded attempts**.
 
 | Measured diagnostic | Maximum |
 | --- | --- |
@@ -87,7 +91,7 @@ Node 24.22.1 and Python 3.11.9 on Windows: **6 kinematics tests, 12 deployment/r
 | Stance endpoint height error, 19,200 poses | 1.39e-16 m |
 | Straight-line stance slide per step, 7,200 steps | 2.07e-15 m |
 
-These near-machine-precision results are expected for an analytic geometric construction. They do **not** measure physical stability, contact forces, learned-motion quality, or benchmark success rate. The live scene reported 7,938 rendered triangles and 43 draw calls in one sampled pose. Software-rendered screenshot runs were substantially slower than the embedded browser, which sampled approximately 60 FPS; neither is a controlled performance benchmark. Vite emits a non-fatal bundle-size advisory for the shared Three.js chunk (505 kB minified / 126 kB gzip); the playground and replay/comparison entry scripts are about 20 and 16 kB respectively.
+These near-machine-precision results are expected for an analytic geometric construction. They do **not** measure physical stability, contact forces, learned-motion quality, or benchmark success rate. The live scene reported 7,938 rendered triangles and 43 draw calls in one sampled pose. Software-rendered screenshot runs were substantially slower than the embedded browser, which sampled approximately 60 FPS; neither is a controlled performance benchmark. Vite emits a non-fatal bundle-size advisory for the shared Three.js chunk (505 kB minified / 126 kB gzip); the playground and physics/evidence entry scripts are about 20 and 22 kB respectively.
 
 ## Playground limitations
 
@@ -136,6 +140,23 @@ Direct PD was faster and had lower joint-angle error, but fell even without push
 
 ![Recorded matched-controller comparison, including every failed episode](docs/comparison.png)
 
+### Physical locomotion: failed experiment retained
+
+The self-authored reference uses the actual G1 six-joint leg Jacobians, joint/tendon limits, flat-foot orientation, stationary stance feet and coherent joint velocities. The original playground's generic two-bone IK is not used as if it were G1 physics. The planned root trajectory influences reference IK and metrics only; simulated root positions are never overwritten after initialization.
+
+| Fixed eight-second attempts | Attempt 01 | Attempt 02 |
+| --- | ---: | ---: |
+| Target / actual root advance | +35 / **-2.52 cm** | +35 / **-2.37 cm** |
+| Verified steps, left / right | **0 / 0** | **0 / 0** |
+| Root XY RMSE (limit 15 cm) | **25.38 cm** | **25.49 cm** |
+| Mean body-origin error (limit 15 cm) | **21.67 cm** | **21.91 cm** |
+| Falls / numerical warnings | 0 / 0 | 0 / 0 |
+| Overall walking criteria | **Failed** | **Failed** |
+
+The second and final attempt increased reference clearance and lateral shift without relaxing any success criterion. Both feet stayed loaded at every post-initial sample. Consequently, low measured contact slip reflects planted feet, **not successful locomotion**. The policy export has no direct root-position/linear-velocity target input; kinematic reference feasibility alone did not yield a physically tracked walk. This does not prove the policy cannot walk with compatible reference motions. No further tuning or hidden trials were performed.
+
+![Both physical locomotion attempts explicitly reported as failed](docs/locomotion.png)
+
 ## Structure
 
 ```text
@@ -147,6 +168,8 @@ research/                Optional pinned CPU inference runner and contract tests
 public/physics-replay.json Measured rollout output (no weights or motion dataset)
 research/evaluate.py     Fixed paired-controller comparison and aggregation
 public/physics-comparison.json All twelve measured comparison cases and protocol
+research/locomotion.py    Bounded G1 IK reference and force-verified locomotion experiment
+public/locomotion/       Both failed attempts, complete telemetry and derived summary
 tests/kinematics.test.ts Numerical invariants and motion checks
 tests/browser.spec.ts    Browser controls, reach interaction and screenshots
 tests/physics.spec.ts    Recorded replay controls and explicit missing-data error

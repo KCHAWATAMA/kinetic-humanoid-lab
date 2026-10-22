@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { loadLocomotion } from "./locomotion";
 import "./style.css";
 import "./physics.css";
 
@@ -135,6 +136,7 @@ app.innerHTML = `
     <p class="comparison-description">Pooled errors include all observed samples, including falls and truncated trials; early terminations are shown explicitly. No full-horizon comparison is implied if any episode is truncated. Twelve synthetic episodes cannot establish statistical superiority, generalization or state-of-the-art performance. Wall times include host load.</p>
     <a href="./physics-comparison.json" download class="replay-download comparison-download">Download complete comparison and fixed protocol &#8599;</a>
   </section>
+  <section id="locomotion-section" class="comparison-section" aria-labelledby="locomotion-heading"></section>
   <div id="physics-error-banner" role="alert" hidden></div>`;
 
 function node<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -350,6 +352,7 @@ declare global {
   }
 }
 start().catch(fail);
+void loadLocomotion(node("locomotion-section"));
 loadComparison().catch(error => {
   console.error(error);
   node("comparison-status").textContent = "COMPARISON UNAVAILABLE";

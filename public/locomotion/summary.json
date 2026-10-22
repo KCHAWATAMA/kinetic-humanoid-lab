@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "kind": "recorded-locomotion-attempts",
+  "status": "complete",
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": "complete",
+      "artifact": "attempt-01.json",
+      "artifactSha256": "58b9209be0dc3ebdb872d689cc42d30c0a87f2328d5f8da6a156e9f87ec542bd",
+      "protocol": {
+        "id": "g1-self-authored-slow-walk-v1",
+        "seconds": 8,
+        "initial_hold_s": 1,
+        "step_count": 4,
+        "step_period_s": 1.2,
+        "swing_start_s": 0.25,
+        "swing_end_s": 0.95,
+        "step_length_m": 0.1,
+        "foot_clearance_m": 0.04,
+        "stance_root_shift_m": 0.08,
+        "wall_limit_seconds": 120,
+        "maximum_attempts": 2,
+        "criteria": {
+          "minimum_forward_progress_m": 0.25,
+          "maximum_forward_progress_m": 0.45,
+          "maximum_final_lateral_drift_m": 0.15,
+          "maximum_root_xy_rmse_m": 0.15,
+          "maximum_joint_rmse_rad": 0.3,
+          "maximum_mean_body_error_m": 0.15,
+          "minimum_verified_steps_per_foot": 2,
+          "minimum_support_fraction_after_half_second": 0.9,
+          "maximum_mean_contact_slip_m_s": 0.08,
+          "maximum_p95_contact_slip_m_s": 0.2
+        },
+        "step_detection": {
+          "loaded_foot_normal_force_n": 5,
+          "minimum_air_time_s": 0.1,
+          "minimum_clearance_above_liftoff_m": 0.02,
+          "minimum_forward_landing_distance_m": 0.05
+        },
+        "reference_gates": {
+          "maximum_foot_position_error_m": 0.0002,
+          "maximum_foot_orientation_error_rad": 0.001,
+          "maximum_joint_velocity_rad_s": 4
+        },
+        "interpretation": "All criteria plus full completion, zero numerical warnings and no detected fall are required. Root translation is only a reference/metric, never written into simulated state after initialization. Existing ONNX export has no root-position or root-linear-velocity input. No tuning until success; retain every attempt."
+      },
+      "protocolSha256": "bbcac12adbd84e7f13c311763429e1bb7af3352f0d179cd42e6d816126be6484",
+      "passed": false,
+      "gates": {
+        "full_duration": true,
+        "no_fall": true,
+        "no_numerical_warning": true,
+        "forward_progress": false,
+        "lateral_drift": true,
+        "root_tracking": false,
+        "joint_tracking": true,
+        "body_tracking": false,
+        "verified_steps": false,
+        "supported_motion": true,
+        "mean_contact_slip": true,
+        "p95_contact_slip": true
+      },
+      "metrics": {
+        "forward_progress_m": -0.02520170276829727,
+        "target_forward_progress_m": 0.35000000000000003,
+        "final_lateral_drift_m": -0.004247419857781665,
+        "root_xy_rmse_m": 0.2538156509050872,
+        "verified_steps_per_foot": [
+          0,
+          0
+        ],
+        "support_fraction_after_half_second": 1.0,
+        "loaded_samples_per_foot": [
+          400,
+          400
+        ],
+        "mean_contact_slip_m_s": [
+          0.00041843191458315805,
+          0.0005074822667332505
+        ],
+        "p95_contact_slip_m_s": [
+          0.000678607514308635,
+          0.0008023175706262824
+        ],
+        "integrated_sampled_contact_slip_m": [
+          0.003347455316665267,
+          0.004059858133866003
+        ]
+      },
+      "physicsMetrics": {
+        "requested_seconds": 8,
+        "control_steps": 400,
+        "controller_calls": 400,
+        "physics_steps": 8000,
+        "error_samples": 401,
+        "simulated_seconds": 8.0,
+        "completed": true,
+        "fell": false,
+        "first_fall_time_s": null,
+        "joint_rmse_rad": 0.15404976757076552,
+        "max_frame_joint_rms_rad": 0.17923255049310727,
+        "mean_body_position_error_m": 0.2167276071739993,
+        "min_root_height_m": 0.7590215736138018,
+        "max_pelvis_tilt_deg": 4.341747285176737,
+        "fraction_frames_with_contacts": 0.9975062344139651,
+        "mean_inference_ms": 7.310614499965595,
+        "p95_inference_ms": 14.087914999618066,
+        "mean_control_ms": 8.602002000016,
+        "mean_pd_target_change_l2_rad": 0.026241307365089506,
+        "wall_seconds": 7.97719380000126,
+        "simulation_to_wall_ratio": 1.0028589251521929,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "referenceDiagnostics": {
+        "frames": 409,
+        "max_foot_position_error_m": 7.082789358974453e-07,
+        "max_foot_orientation_error_rad": 2.2302015940987762e-07,
+        "max_joint_velocity_rad_s": 1.5695686947846066,
+        "target_forward_progress_m": 0.35000000000000003,
+        "joint_limits_satisfied": true,
+        "ankle_tendon_limits_satisfied": true
+      },
+      "footHeightExcursionM": [
+        5.032970991967339e-05,
+        0.00029348840101946216
+      ],
+      "minimumSwingReferenceLoadN": [
+        89.8461306385765,
+        84.6339622230973
+      ]
+    },
+    {
+      "attempt": 2,
+      "status": "complete",
+      "artifact": "attempt-02.json",
+      "artifactSha256": "c8aab520e8137d9a65188b9fd50c9e3a1179926e4af79bf320c7ff53693892ff",
+      "protocol": {
+        "id": "g1-self-authored-slow-walk-v2",
+        "change_reason": "Attempt 1 never unloaded either foot (minimum intended-swing loads 89.85/84.63 N). One final variant doubles reference clearance and increases stance-side shift, retaining timing, target progress and every success criterion. Stop after this attempt regardless of outcome.",
+        "seconds": 8,
+        "initial_hold_s": 1,
+        "step_count": 4,
+        "step_period_s": 1.2,
+        "swing_start_s": 0.25,
+        "swing_end_s": 0.95,
+        "step_length_m": 0.1,
+        "foot_clearance_m": 0.08,
+        "stance_root_shift_m": 0.1,
+        "wall_limit_seconds": 120,
+        "maximum_attempts": 2,
+        "criteria": {
+          "minimum_forward_progress_m": 0.25,
+          "maximum_forward_progress_m": 0.45,
+          "maximum_final_lateral_drift_m": 0.15,
+          "maximum_root_xy_rmse_m": 0.15,
+          "maximum_joint_rmse_rad": 0.3,
+          "maximum_mean_body_error_m": 0.15,
+          "minimum_verified_steps_per_foot": 2,
+          "minimum_support_fraction_after_half_second": 0.9,
+          "maximum_mean_contact_slip_m_s": 0.08,
+          "maximum_p95_contact_slip_m_s": 0.2
+        },
+        "step_detection": {
+          "loaded_foot_normal_force_n": 5,
+          "minimum_air_time_s": 0.1,
+          "minimum_clearance_above_liftoff_m": 0.02,
+          "minimum_forward_landing_distance_m": 0.05
+        },
+        "reference_gates": {
+          "maximum_foot_position_error_m": 0.0002,
+          "maximum_foot_orientation_error_rad": 0.001,
+          "maximum_joint_velocity_rad_s": 4
+        },
+        "interpretation": "All criteria plus full completion, zero numerical warnings and no detected fall are required. Root translation is only a reference/metric, never written into simulated state after initialization. Existing ONNX export has no root-position or root-linear-velocity input. No tuning until success; retain every attempt."
+      },
+      "protocolSha256": "4126c53c2325d544f3f3f3004175a78a336675be4f5be6ac08128055c9a37e08",
+      "passed": false,
+      "gates": {
+        "full_duration": true,
+        "no_fall": true,
+        "no_numerical_warning": true,
+        "forward_progress": false,
+        "lateral_drift": true,
+        "root_tracking": false,
+        "joint_tracking": true,
+        "body_tracking": false,
+        "verified_steps": false,
+        "supported_motion": true,
+        "mean_contact_slip": true,
+        "p95_contact_slip": true
+      },
+      "metrics": {
+        "forward_progress_m": -0.02367339531674826,
+        "target_forward_progress_m": 0.35000000000000003,
+        "final_lateral_drift_m": -0.003299143725399687,
+        "root_xy_rmse_m": 0.25487867985054313,
+        "verified_steps_per_foot": [
+          0,
+          0
+        ],
+        "support_fraction_after_half_second": 1.0,
+        "loaded_samples_per_foot": [
+          400,
+          400
+        ],
+        "mean_contact_slip_m_s": [
+          0.00046905111069214746,
+          0.0006056782234044777
+        ],
+        "p95_contact_slip_m_s": [
+          0.0007809797387087641,
+          0.0015194492155751497
+        ],
+        "integrated_sampled_contact_slip_m": [
+          0.003752408885537177,
+          0.004845425787235821
+        ]
+      },
+      "physicsMetrics": {
+        "requested_seconds": 8,
+        "control_steps": 400,
+        "controller_calls": 400,
+        "physics_steps": 8000,
+        "error_samples": 401,
+        "simulated_seconds": 8.0,
+        "completed": true,
+        "fell": false,
+        "first_fall_time_s": null,
+        "joint_rmse_rad": 0.15868385876578056,
+        "max_frame_joint_rms_rad": 0.20532945083397006,
+        "mean_body_position_error_m": 0.21911008341529215,
+        "min_root_height_m": 0.7590215736138018,
+        "max_pelvis_tilt_deg": 4.395740890081099,
+        "fraction_frames_with_contacts": 0.9975062344139651,
+        "mean_inference_ms": 7.260201249982856,
+        "p95_inference_ms": 15.194754999356517,
+        "mean_control_ms": 8.48364100004801,
+        "mean_pd_target_change_l2_rad": 0.03168644777290234,
+        "wall_seconds": 7.612425999999687,
+        "simulation_to_wall_ratio": 1.0509133356436344,
+        "numerical_warnings": 0,
+        "initial_root_height_m": 0.7590215736138018
+      },
+      "referenceDiagnostics": {
+        "frames": 409,
+        "max_foot_position_error_m": 7.18906076942479e-07,
+        "max_foot_orientation_error_rad": 2.7717762049642705e-07,
+        "max_joint_velocity_rad_s": 2.7698018611370165,
+        "target_forward_progress_m": 0.35000000000000003,
+        "joint_limits_satisfied": true,
+        "ankle_tendon_limits_satisfied": true
+      },
+      "footHeightExcursionM": [
+        7.849341213680278e-05,
+        0.0004704012901807081
+      ],
+      "minimumSwingReferenceLoadN": [
+        56.514310843010115,
+        67.54862715676407
+      ]
+    }
+  ],
+  "walkingAchieved": false,
+  "interpretation": "Fixed local gates, not a benchmark or SOTA. Include both attempts; absence of falls and low slip alone are not walking."
+}
