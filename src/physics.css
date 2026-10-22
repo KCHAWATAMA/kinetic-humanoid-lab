@@ -34,7 +34,7 @@
 .comparison-section h2 { font-size: 28px; font-weight: 400; }
 .comparison-description { max-width: 1000px; font-size: 12px; line-height: 1.8; color: #96b3bf; }
 #comparison-status { font: 10px/1.7 Consolas, monospace; color: #a1f1cd; overflow-wrap: anywhere; }
-#comparison-error:not([hidden]) { padding: 16px; border: 1px solid #edb582; color: #ffe1b4; font-size: 12px; }
+#comparison-error:not([hidden]), #mocap-error:not([hidden]) { padding: 16px; border: 1px solid #edb582; color: #ffe1b4; font-size: 12px; }
 .comparison-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin: 24px 0; }
 .comparison-card { padding: 22px; border: 1px solid #29443e; border-radius: 6px; }
 .comparison-card h3 { color: #a1f1cd; margin-top: 0; font-size: 18px; font-weight: 400; }

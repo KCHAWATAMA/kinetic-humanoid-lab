@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { loadLocomotion } from "./locomotion";
+import { loadMocap } from "./mocap";
 import "./style.css";
 import "./physics.css";
 
@@ -137,6 +138,7 @@ app.innerHTML = `
     <a href="./physics-comparison.json" download class="replay-download comparison-download">Download complete comparison and fixed protocol &#8599;</a>
   </section>
   <section id="locomotion-section" class="comparison-section" aria-labelledby="locomotion-heading"></section>
+  <section id="mocap-section" class="comparison-section" aria-labelledby="mocap-heading"></section>
   <div id="physics-error-banner" role="alert" hidden></div>`;
 
 function node<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -353,6 +355,7 @@ declare global {
 }
 start().catch(fail);
 void loadLocomotion(node("locomotion-section"));
+void loadMocap(node("mocap-section"));
 loadComparison().catch(error => {
   console.error(error);
   node("comparison-status").textContent = "COMPARISON UNAVAILABLE";

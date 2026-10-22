@@ -2,7 +2,9 @@
 
 This backend runs NVIDIA's pretrained G1 deployment tracker through ONNX Runtime and steps a floating-base Unitree G1 in MuJoCo. It is separate from the procedural browser baseline. The browser physics page replays **recorded simulation transforms**; it does not run the policy live.
 
-**Latest checkpoint: [failed-walking contract diagnosis](CONTRACT-AUDIT.md).** Independent source semantics match actual ONNX intermediate observations and physical action scaling. Reference probes change policy output; both unchanged walking trajectories reproduce exactly, with no torque saturation but insufficient support transfer. No runtime contract fix or walking success is claimed. The report includes complete requested/commanded/realized leg evidence, the documentation's tanh discrepancy, and the licensed-reference access boundary.
+**Latest checkpoint: [CMU 07/04 reference rejection](CMU-RETARGET.md).** The selected permissively usable human slow-walk clip was safely parsed, morphology-scaled and subjected to fixed exact-G1 reference gates. Contact inference, reach, IK, tendon and velocity checks failed, so no CMU policy rollout was allowed. Raw motion stays in ignored cache; the saved result and browser panel are reference diagnostics, not physical walking. Both the completed preflight and an initial reporting-error recovery are retained.
+
+**Previous checkpoint: [failed-walking contract diagnosis](CONTRACT-AUDIT.md).** Independent source semantics match actual ONNX intermediate observations and physical action scaling. Reference probes change policy output; both unchanged walking trajectories reproduce exactly, with no torque saturation but insufficient support transfer. No runtime contract fix or walking success is claimed. The report includes complete requested/commanded/realized leg evidence, the documentation's tanh discrepancy, and the licensed-reference access boundary.
 
 **Verified checkpoint:** both 10-second CPU physics trials completed without detected falls or MuJoCo numerical warnings. The saved replay contains actual observations from 1,000 policy calls and 20,000 physics steps, not procedural animation substituted for inference. These are small synthetic-reference smoke tests, not state-of-the-art benchmark results.
 
@@ -35,7 +37,8 @@ Pinned official source: [NVlabs/ProtoMotions at f69fdcaabff31846b4d2247207417b57
 | `g1-bones-deploy/compiled_models/unified_pipeline.onnx` | NVIDIA Open Model License, 24 October 2025; downloaded only to ignored local cache with its license PDF, notice and model card |
 | G1 MJCF | Unitree Robotics BSD-3-Clause; attribution/license retained beside the cached description |
 | Deployment protocol reference | NVIDIA ProtoMotions Apache-2.0; source license and third-party notice retained in cache |
-| Reference motions | Self-authored grounded nominal stand and slow symmetric shoulder/elbow sweep; no BONES or other motion dataset downloaded |
+| Physical-rollout references | Self-authored grounded nominal stand, slow symmetric shoulder/elbow sweep and bounded synthetic walking; no BONES motion data downloaded |
+| Separate CMU reference preflight | Only subject 07 skeleton and trial 04 motion; CMU stated terms, not CC-BY. Raw files stay ignored; derived reference rejected before physics. [Terms and attribution](CMU-RETARGET.md#source-terms-and-exact-files) |
 | Replay | Our numerical simulation output, not upstream weights or motion data |
 
 Model SHA-256: `a59baa3e04a951e5cf0b4cc68f24ebaafa9272714226618b99a5017dfc805b4c` (22,606,590 bytes).

@@ -28,6 +28,10 @@ test("physics replay displays recorded policy data and supports case, pause and 
   const steps = page.locator("#locomotion-table tr").filter({ hasText: "Verified steps" });
   await expect(steps.locator("td").nth(1)).toHaveText("0 / 0");
   await expect(steps.locator("td").nth(2)).toHaveText("0 / 0");
+  await expect(page.locator("#mocap-status")).toHaveText("REFERENCE REJECTED / 0 POLICY CALLS / 0 PHYSICS STEPS");
+  await expect(page.locator("#mocap-table tbody tr")).toHaveCount(12);
+  await expect(page.locator("#mocap-table tr").filter({ hasText: "Inferred source support" })).toContainText("73.94%");
+  await expect(page.locator("#mocap-table tr").filter({ hasText: "Required pelvis reach lowering" })).toContainText("12.10 cm");
   const paused = await snapshot();
   await page.waitForTimeout(150);
   expect((await snapshot()).time).toBe(paused.time);
@@ -46,12 +50,34 @@ test("physics replay displays recorded policy data and supports case, pause and 
   await page.screenshot({ path: "test-results/kinetic-physics.png", fullPage: true });
   await page.locator(".comparison-section").first().screenshot({ path: "test-results/kinetic-comparison.png" });
   await page.locator("#locomotion-section").screenshot({ path: "test-results/kinetic-locomotion.png" });
+  await page.locator("#mocap-section").screenshot({ path: "test-results/kinetic-mocap.png" });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator("#physics-reset").click();
   expect((await snapshot()).time).toBe(0);
   await expect(page.locator("#comparison-heading")).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("missing or unfinished mocap evidence is not shown as physics or a valid reference", async ({ page }) => {
+  let missing = true;
+  await page.route("**/mocap/g1-cmu-07-04-v1.json", route => route.fulfill(missing
+    ? { status: 404, body: "missing" }
+    : { status: 200, contentType: "application/json", body: JSON.stringify({
+      schemaVersion: 1, kind: "cmu-mocap-reference-experiment", identity: "g1-cmu-07-04-v1",
+      status: "running", physicsExecuted: false,
+    }) }));
+  await page.goto("/physics.html");
+  await expect(page.locator("#mocap-error")).toContainText("Mocap evidence request failed (404)");
+  await expect(page.locator("#mocap-table tbody tr")).toHaveCount(0);
+  missing = false;
+  await page.reload();
+  await expect(page.locator("#mocap-error")).toContainText("Incomplete or unsupported mocap preflight evidence");
+  await expect(page.locator("#mocap-status")).toHaveText("MOCAP EVIDENCE UNAVAILABLE");
+  await expect(page.locator("#mocap-table tbody tr")).toHaveCount(0);
+  await waitForReplay(page);
+  await page.locator("#physics-pause").click();
+  await expect(page.locator("#comparison-status")).toContainText("12 recorded episodes");
 });
 
 test("missing physics data is an explicit error rather than a synthetic fallback", async ({ page }) => {

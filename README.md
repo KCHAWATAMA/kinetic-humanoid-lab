@@ -12,6 +12,8 @@ A local, interactive 3D humanoid playground with analytic limb inverse kinematic
 
 **The subsequent [contract diagnosis](research/CONTRACT-AUDIT.md) found no deployment mismatch in the inspected fields.** Controlled target changes reach the actual ONNX graph and alter its commands, but support transfer remains insufficient; no actuator torque limits were reached. Instrumented runs reproduced both historical root trajectories and checked metrics exactly. A known-compatible locomotion reference remains the missing positive control, with motion-data licensing treated separately from model licensing.
 
+**A licensed CMU slow-walk reference was attempted, but rejected before physics.** Subject 07/trial 04 was safely parsed and retargeted without changing its timing. The fixed candidate failed contact inference, reach, IK, tendon and velocity gates; no CMU policy trial ran. [Exact source terms, hashes, failure evidence and reproduction](research/CMU-RETARGET.md) distinguish this reference-generation blocker from the earlier physical failures. The physics page includes a separate rejection panel, not a fake walking replay.
+
 ![Kinetic desktop demo, captured by the software-rendered browser smoke test](docs/demo.png)
 
 ![Recorded pretrained G1 physics, with simulated and reference skeletons](docs/physics-demo.png)
@@ -39,6 +41,8 @@ The measured physics replay is at **http://127.0.0.1:4173/physics.html**. Viewin
 The same page's comparison section reads `public/physics-comparison.json`, separate from the unchanged ten-second replay. Reproduce its fixed twelve-episode matrix with `research\.venv\Scripts\python.exe research\evaluate.py` after following the Python setup guide.
 
 Failed locomotion evidence is at **http://127.0.0.1:4173/physics.html#locomotion-heading**. See the [bounded experiment and reproduction commands](research/README.md#bounded-physical-locomotion-experiment). Attempt files are immutable; use a separate output directory when reproducing them.
+
+CMU reference preflight evidence is at **http://127.0.0.1:4173/physics.html#mocap-heading**. Its recorded diagnostics are kinematic, not physical progress, steps or contact slip. The original replay and experiment artifacts are unchanged.
 
 ## Explore
 
@@ -166,12 +170,16 @@ src/kinematics.ts        Renderer-independent analytic IK and gait
 src/main.ts              Geometry, scene, interaction and diagnostics
 src/style.css            Responsive laboratory interface
 src/physics.ts           Viewer for recorded CPU policy/physics results
+src/mocap.ts             Explicitly rejected CMU reference evidence (not physics playback)
 research/                Optional pinned CPU inference runner and contract tests
 public/physics-replay.json Measured rollout output (no weights or motion dataset)
 research/evaluate.py     Fixed paired-controller comparison and aggregation
 public/physics-comparison.json All twelve measured comparison cases and protocol
 research/locomotion.py    Bounded G1 IK reference and force-verified locomotion experiment
 public/locomotion/       Both failed attempts, complete telemetry and derived summary
+research/cmu.py          Pinned numeric-only reader for CMU 07/04 ASF/AMC
+research/retarget_cmu.py Bounded CMU-to-G1 reference preflight and rejection gates
+public/mocap/            Rejected candidate, provenance and full execution ledger
 tests/kinematics.test.ts Numerical invariants and motion checks
 tests/browser.spec.ts    Browser controls, reach interaction and screenshots
 tests/physics.spec.ts    Recorded replay controls and explicit missing-data error
