@@ -10,6 +10,8 @@ A local, interactive 3D humanoid playground with analytic limb inverse kinematic
 
 **Physical walking has not been achieved.** Two bounded eight-second, self-authored slow-walk experiments completed without falls, but neither foot took a verified step and the roots moved slightly backward. Both failed the progress and world-space tracking criteria. Their complete configurations, contact/slip telemetry, failed gates and frames are retained—not presented as successful walking.
 
+**The subsequent [contract diagnosis](research/CONTRACT-AUDIT.md) found no deployment mismatch in the inspected fields.** Controlled target changes reach the actual ONNX graph and alter its commands, but support transfer remains insufficient; no actuator torque limits were reached. Instrumented runs reproduced both historical root trajectories and checked metrics exactly. A known-compatible locomotion reference remains the missing positive control, with motion-data licensing treated separately from model licensing.
+
 ![Kinetic desktop demo, captured by the software-rendered browser smoke test](docs/demo.png)
 
 ![Recorded pretrained G1 physics, with simulated and reference skeletons](docs/physics-demo.png)

@@ -216,7 +216,8 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: 
              case: str, seconds: float, *, controller: str = "onnx", pushes: tuple[Push, ...] = (),
              record_frames: bool = True, wall_limit_seconds: float | None = None,
              reference_frames: list[dict] | None = None,
-             observe: Callable[[mujoco.MjModel, mujoco.MjData, int, dict], None] | None = None) -> dict:
+             observe: Callable[[mujoco.MjModel, mujoco.MjData, int, dict], None] | None = None,
+             observe_substep: Callable[[mujoco.MjModel, mujoco.MjData], None] | None = None) -> dict:
     if controller not in ("onnx", "direct_pd") or (controller == "onnx" and session is None):
         raise ValueError("Invalid controller or missing policy.")
     if not math.isfinite(seconds) or not 1 <= seconds <= 30:
@@ -319,6 +320,8 @@ def run_case(model: mujoco.MjModel, session: ort.InferenceSession | None, meta: 
         for _ in range(meta["timing"]["decimation"]):
             mujoco.mj_step(model, data)
             physics_steps += 1
+            if observe_substep is not None:
+                observe_substep(model, data)
         mujoco.mj_forward(model, data)
         if not np.isfinite(data.qpos).all() or not np.isfinite(data.qvel).all():
             termination = f"Non-finite physics after control step {step}"

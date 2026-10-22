@@ -2,6 +2,8 @@
 
 This backend runs NVIDIA's pretrained G1 deployment tracker through ONNX Runtime and steps a floating-base Unitree G1 in MuJoCo. It is separate from the procedural browser baseline. The browser physics page replays **recorded simulation transforms**; it does not run the policy live.
 
+**Latest checkpoint: [failed-walking contract diagnosis](CONTRACT-AUDIT.md).** Independent source semantics match actual ONNX intermediate observations and physical action scaling. Reference probes change policy output; both unchanged walking trajectories reproduce exactly, with no torque saturation but insufficient support transfer. No runtime contract fix or walking success is claimed. The report includes complete requested/commanded/realized leg evidence, the documentation's tanh discrepancy, and the licensed-reference access boundary.
+
 **Verified checkpoint:** both 10-second CPU physics trials completed without detected falls or MuJoCo numerical warnings. The saved replay contains actual observations from 1,000 policy calls and 20,000 physics steps, not procedural animation substituted for inference. These are small synthetic-reference smoke tests, not state-of-the-art benchmark results.
 
 ## Reproduce on Windows
@@ -42,7 +44,7 @@ Applicable source and robot notices are retained in [licenses/](licenses/). Cach
 
 `fetch_assets.py` retrieves a fixed allowlist from the pinned official revision, bounds payload sizes, checks the model against its official Git LFS SHA-256 and records every file digest. The runner verifies these digests before loading. It reads only ONNX, safe YAML, XML and JSON: no `.pt`, `.ckpt`, pickle, PyTorch, upstream Python execution, or custom ONNX plugins. ONNX Runtime telemetry is disabled. Nothing is uploaded.
 
-The full BONES-SEED reference-motion access/license contract was not established for this user. The public presence of a retargeted file is not treated as permission. The optional route therefore **does not reproduce the upstream BONES benchmark**. The small ONNX export avoids the 238 MB training checkpoint and full GPU-oriented framework.
+The full BONES-SEED reference-motion access/license contract was not established for this user. The subsequent audit verified [custom eligibility-restricted terms](https://bones.studio/info/seed-license) and gated access; no terms were accepted or eligibility asserted. The public presence of a retargeted file is not treated as permission. The optional route therefore **does not reproduce the upstream BONES benchmark**. The small ONNX export avoids the 238 MB training checkpoint and full GPU-oriented framework.
 
 ## Contract and deviations
 

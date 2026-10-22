@@ -1,0 +1,22 @@
+{
+  "identity": "contract-audit-v1",
+  "purpose": "Diagnosis only: unchanged stand and exact historical walking protocols, not a third walking attempt or parameter search.",
+  "cases": ["stand", "attempt-01", "attempt-02"],
+  "seconds": 8,
+  "wall_limit_seconds_per_case": 120,
+  "probe_control_step": 80,
+  "knee_probe_rad": 0.1,
+  "velocity_probe_rad_s": 0.2,
+  "future_anchor_yaw_probe_deg": 5,
+  "passthrough_translation_m": 1,
+  "torque_saturation_fraction": 0.999999,
+  "sample_precision_decimal_places": 8,
+  "historical_metric_tolerance": 1e-10,
+  "notes": [
+    "Hold robot state and processed-action history at nominal stand t=1.60 s for all static probes.",
+    "Change the left knee at exactly one of the four future time slots per probe; additionally test one right-knee, velocity, and anchor-rotation channel.",
+    "Compare complete historical swing references against stand at the identical held state/history.",
+    "Collect torque utilization at all 1000 Hz physics evaluations, not just control samples.",
+    "No gains, limits, reference trajectories, initialization, inference actions, or walking criteria are changed."
+  ]
+}
